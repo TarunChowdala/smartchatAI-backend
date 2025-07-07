@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-dotenv
+supabase
+httpx
+requests
+langchain
+langchain-community
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+firebase-admin
