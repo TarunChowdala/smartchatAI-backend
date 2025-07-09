@@ -4,6 +4,11 @@ import requests
 from app.api.auth import verify_token
 from app.db.firestore_client import db
 from firebase_admin import firestore
+from dotenv import load_dotenv
+load_dotenv()
+import os
+
+API_KEY = os.getenv("GEMINI_API_KEY")
 
 class MessageInput(BaseModel):
     user_id: int | str
@@ -73,8 +78,6 @@ def get_user_name(user_id):
 
 def ask_gemini(messages):
     # Flatten chat history into a single prompt
-
-    API_KEY = "AIzaSyD2zZoD-3gR1yYMibnZQZrjbjscFtupghg"
     headers = {
         "x-goog-api-key": API_KEY,
         "Content-Type": "application/json"

@@ -17,6 +17,8 @@ import requests
 import os
 from pathlib import Path
 from app.api.auth import verify_token
+from dotenv import load_dotenv
+load_dotenv()
 
 router = APIRouter()
 
@@ -25,7 +27,7 @@ vectorstore = None
 qa_chain = None
 
 # OpenRouter configuration
-GEMINI_API_KEY = "AIzaSyD2zZoD-3gR1yYMibnZQZrjbjscFtupghg"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.5-flash:generateContent"
 
 # Supported file extensions and their corresponding loaders
