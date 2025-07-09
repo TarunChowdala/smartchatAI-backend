@@ -11,9 +11,9 @@ import re
 
 router = APIRouter()
 
-# OpenRouter configuration
-OPENROUTER_API_KEY = "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"
-OPENROUTER_MODEL_NAME = "mistralai/mistral-7b-instruct:free"
+# Gemini configuration
+GEMINI_API_KEY = "AIzaSyD2zZoD-3gR1yYMibnZQZrjbjscFtupghg"
+GEMINI_MODEL_NAME = "gemini-2.5-flash:generateContent"
 
 
 class genereate_resume_model(BaseModel):
@@ -130,38 +130,35 @@ async def compare_resume_jd(
             """
 
        
-        # Call OpenRouter API
+        # Call Gemini API
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+            "Content-Type": "application/json"
         }
 
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a professional resume analyzer and career advisor. Provide detailed, actionable feedback for resume-job description matching."
-            },
-            {"role": "user", "content": analysis_prompt}
-        ]
-
-        json_data = {
-            "model": OPENROUTER_MODEL_NAME,
-            "messages": messages,
-            "max_tokens": 2000,
-            "temperature": 0.3,
+        # Gemini expects the prompt in the 'contents' field
+        json_body = {
+            "contents": [
+                {"parts": [{"text": analysis_prompt}]}
+            ]
         }
 
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
             headers=headers,
-            json=json_data,
+            json=json_body,
             timeout=60,
         )
         
         if response.status_code == 200:
             ai_response = response.json()
-            analysis_result = ai_response['choices'][0]['message']['content']
-            return {"analysis": analysis_result, "resume_text" : resume_text, "job_description" : job_description}
+            try:
+                analysis_result = ai_response["candidates"][0]["content"]["parts"][0]["text"]
+                # Remove markdown code block formatting if present
+                cleaned_result = re.sub(r"^```(json)?|```$", "", analysis_result, flags=re.IGNORECASE).strip()
+                return {"analysis": cleaned_result, "resume_text": resume_text, "job_description": job_description}
+            except Exception:
+                return {"error": "Unexpected Gemini API response format", "raw": ai_response}
         else:
             raise HTTPException(status_code=500, detail=f"Error from AI service: {response.text}")
 
@@ -253,31 +250,25 @@ async def generate_resume(request : Request,req : genereate_resume_model):
     
     try:
         headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+            "Content-Type": "application/json",
         }
-        json_data = {
-            "model": OPENROUTER_MODEL_NAME,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": resume_prompt
-                }
-            ],
-            "max_tokens": 2000,
-            "temperature": 0.3,
+        json_body = {
+            "contents": [
+                {"parts": [{"text": resume_prompt}]}
+            ]
         }
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
             headers=headers,
-            json=json_data,
+            json=json_body,
             timeout=60,
         )
 
         if response.status_code == 200:
             ai_response = response.json()
-            result = ai_response['choices'][0]['message']['content']
             try:
+                result = ai_response["candidates"][0]["content"]["parts"][0]["text"]
                 cleaned_result = result.strip()
                 # Remove triple backticks if present
                 cleaned_result = re.sub(r"^```(json)?|```$", "", cleaned_result, flags=re.IGNORECASE).strip()
@@ -285,6 +276,8 @@ async def generate_resume(request : Request,req : genereate_resume_model):
                 return parsed_result
             except json.JSONDecodeError:
                 return {"error": "Failed to parse AI response as JSON", "raw": result}
+            except Exception:
+                return {"error": "Unexpected Gemini API response format", "raw": ai_response}
         else:
             raise HTTPException(status_code=500, detail=f"Error from resume generation service: {response.text}")
     except Exception as e:

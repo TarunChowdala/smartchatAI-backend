@@ -25,8 +25,8 @@ vectorstore = None
 qa_chain = None
 
 # OpenRouter configuration
-OPENROUTER_API_KEY = "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"
-OPENROUTER_MODEL_NAME = "mistralai/mistral-7b-instruct:free"
+GEMINI_API_KEY = "AIzaSyD2zZoD-3gR1yYMibnZQZrjbjscFtupghg"
+GEMINI_MODEL_NAME = "gemini-2.5-flash:generateContent"
 
 # Supported file extensions and their corresponding loaders
 SUPPORTED_EXTENSIONS = {
@@ -45,40 +45,42 @@ class QueryRequest(BaseModel):
     question: str
 
 
-class OpenRouterLLM(LLM):
-    api_key: str = Field(default=OPENROUTER_API_KEY)
-    model_name: str = Field(default=OPENROUTER_MODEL_NAME)
+class GeminiLLM(LLM):
+    api_key: str = Field(default=GEMINI_API_KEY)
+    model_name: str = Field(default="gemini-2.5-flash")
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json"
         }
 
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a friendly and helpful AI assistant. Your primary goal is to engage in natural, human-like conversation.\n\nWhen users greet you:\n- Simply respond to the greeting naturally\n- Don't mention document capabilities unless specifically asked\n- Keep the response casual and friendly\n\nWhen users ask about your capabilities:\n- Explain that you're an AI assistant that can help with various tasks\n- Only mention document analysis if they specifically ask about it\n- Keep the explanation simple and conversational\n\nWhen users ask about documents:\n- Provide clear, accurate answers based on the document content\n- If information isn't available, explain what you do know\n- If the question is unclear, ask for clarification\n- Keep responses concise and helpful\n\nAlways maintain a warm, friendly tone and respond naturally to the conversation flow.",
-            },
-            {"role": "user", "content": prompt}
-        ]   
+        # instructions = (
+        #     "You are a professional and friendly AI assistant. "
+        #     "Respond clearly, helpfully, and respectfully, using simple language. "
+        #     "Use only the provided context to answer questions—if not found, say so politely. "
+        #     "Avoid emojis and do not guess. Stay warm and welcoming throughout.\n\n"
+        # )
 
-        json_data = {
-            "model": self.model_name,
-            "messages": messages,
-            "max_tokens": 512,
-            "temperature": 0.3,
-            "stop": stop,
+        full_prompt =  prompt
+
+        json_body = {
+            "contents": [
+                {"parts": [{"text": full_prompt}]}
+            ]
         }
-
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
             headers=headers,
-            json=json_data,
+            json=json_body,
             timeout=30,
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        data = response.json()
+        try:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception:
+            return "Error: Unexpected Gemini API response format"
 
     @property
     def _identifying_params(self) -> Mapping[str, Any]:
@@ -86,7 +88,7 @@ class OpenRouterLLM(LLM):
 
     @property
     def _llm_type(self) -> str:
-        return "openrouter"
+        return "gemini"
 
 
 def get_document_loader(file_path: str):
@@ -148,7 +150,7 @@ async def upload_document(file: UploadFile = File(...), request: Request = None)
         # Setup vector store and QA chain
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         vectorstore = FAISS.from_documents(texts, embeddings)
-        llm = OpenRouterLLM()
+        llm = GeminiLLM()
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vectorstore.as_retriever())
 
         return {"message": "Document uploaded and processed successfully."}
