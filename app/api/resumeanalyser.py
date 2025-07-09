@@ -3,16 +3,19 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Mapping, Any
 from langchain_community.document_loaders import PyPDFLoader
 import requests
+from dotenv import load_dotenv
+load_dotenv()
 import os
 import json
 from pathlib import Path
 from app.api.auth import verify_token
 import re
 
+
 router = APIRouter()
 
 # Gemini configuration
-GEMINI_API_KEY = "AIzaSyD2zZoD-3gR1yYMibnZQZrjbjscFtupghg"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.5-flash:generateContent"
 
 
