@@ -11,9 +11,10 @@ class MessageInput(BaseModel):
     model_name: str
     session_id : str
 
+
 def get_system_prompt(user_name) -> str:
     return f"""You are SmartChat AI, a friendly and helpful AI assistant. Always respond in a polite, natural tone as if you're chatting with a real person.
-    When explaining any topic, try to address the user by their name (“{user_name}”) when appropriate, and use expressions and emojis to match the mood and context of the conversation.
+    When explaining any topic, try to address the user by their name ("{user_name}") when appropriate, and use expressions and emojis to match the mood and context of the conversation.
     Guidelines:
     1. Always consider the context of the entire conversation. You will receive the last 10 messages from the chat history—use them to understand the flow, user intent, and any ongoing topics.
     2. If the user's message is unclear or ambiguous, kindly ask for clarification instead of making assumptions.
@@ -70,6 +71,36 @@ def get_user_name(user_id):
         return name.split()[0] if name else "there"
     return "there"
 
+def ask_gemini(messages):
+    # Flatten chat history into a single prompt
+
+    API_KEY = "AIzaSyD2zZoD-3gR1yYMibnZQZrjbjscFtupghg"
+    headers = {
+        "x-goog-api-key": API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    prompt = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+    json_body = {
+        "contents": [
+            { "parts": [{"text": prompt}] }
+        ]
+    }
+    resp = requests.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        headers=headers,
+        json=json_body
+    )
+    if resp.status_code == 200:
+        data = resp.json()
+        # Defensive: check structure
+        try:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception:
+            return "Error: Unexpected Gemini API response format"
+    else:
+        return f"Error: {resp.status_code} - {resp.text}"
+
 router = APIRouter()
 
 @router.post("/send-message")
@@ -82,31 +113,9 @@ async def send_message(data: MessageInput, request: Request):
     messages.append({"role": "user", "content": data.message})
     
     try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": "Bearer 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",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "SmartchatAI"
-            },
-            json={
-                "model": data.model_name,
-                "messages":messages,
-                "max_tokens": 1000,
-                "temperature": 0.7
-            }
-        )
-        
-        if response.status_code == 200:
-            ai_response = response.json()
-            try:
-                message_content = ai_response['choices'][0]['message']['content']
-                return {"reply": message_content}
-            except (KeyError, IndexError) as e:
-                return {"reply": f"Error processing AI response: {str(e)}"}
-        else:
-            return {"reply": f"Error: {response.status_code} - {response.text}"}
+        # Use Gemini instead of OpenRouter
+        reply = ask_gemini(messages)
+        return {"reply": reply}
             
     except Exception as e:
         return {"reply": f"An error occurred: {str(e)}"}
