@@ -1,3 +1,10 @@
+import firebase_admin
+from firebase_admin import credentials
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate("config/smartchatai-firebase-adminsdk.json")
+    firebase_admin.initialize_app(cred)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import chat

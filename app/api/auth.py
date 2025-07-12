@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter, HTTPException, Request, Header
 from pydantic import BaseModel
+from typing import Optional
 import requests
 from app.db.firestore_client import db
-from firebase_admin import firestore
+from firebase_admin import firestore, auth
 
 router = APIRouter()
 
@@ -18,19 +19,10 @@ def verify_token(request: Request):
             
         id_token = auth_header.split('Bearer ')[1]
         
-        # Verify the token with Firebase
-        url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={FIREBASE_API_KEY}"
-        response = requests.post(url, json={"idToken": id_token}, timeout=5)
+        # Verify the token with Firebase Admin SDK
+        decoded_token = auth.verify_id_token(id_token)
+        return decoded_token
         
-        if response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid token")
-            
-        return response.json()
-        
-    except requests.Timeout:
-        raise HTTPException(status_code=504, detail="Token verification timed out")
-    except requests.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Token verification failed: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
@@ -42,7 +34,16 @@ class SignupRequest(BaseModel):
     email: str
     password: str
     name: str
-    about: str | None = None
+    uid: str 
+    idToken: str 
+    about: Optional[str] = None
+
+class googleSignUpRequest(BaseModel):
+    email: str
+    name : str
+    uid : str
+    idToken : str
+    profileImage : str
 
 class UpdateProfileRequest(BaseModel):
     email: str 
@@ -54,9 +55,12 @@ class UpdatePasswordRequest(BaseModel) :
     current_password: str
     new_password: str
 
+class RefreshTokenRequest(BaseModel):
+    refreshToken: str
+
 @router.post("/login")
 def login_user(data: LoginRequest):
-    # Step 1: Sign in via Firebase REST API
+    # sign in with firebase api
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
     payload = {
         "email": data.email,
@@ -72,14 +76,10 @@ def login_user(data: LoginRequest):
     res_data = response.json()
     user_id = res_data["localId"]
 
-    # Step 2: Save user data to Firestore
-    user_doc_ref = db.collection("users").document(user_id)
-
-    user_doc_ref.set({
-        "email": res_data["email"],
-        "uid": user_id,
-        "last_login": firestore.SERVER_TIMESTAMP,
-    }, merge=True)  # merge=True to update if already exists
+    # update the timestamp
+    db.collection("users").document(user_id).update({
+        "last_login": firestore.SERVER_TIMESTAMP
+    })
 
     return {
         "message": "User logged in successfully",
@@ -92,40 +92,44 @@ def login_user(data: LoginRequest):
 
 @router.post("/signup")
 def signup_user(data: SignupRequest):
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
-    payload = {
-        "email": data.email,
-        "password": data.password,
-        "returnSecureToken": True
-    }
+    user_id = data.uid 
 
-    response = requests.post(url, json=payload)
-    
-    if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Signup failed")
-
-    res_data = response.json()
-    user_id = res_data["localId"]
-
-    # Store user in Firestore
     user_doc = db.collection("users").document(user_id)
     user_doc.set({
         "name": data.name,
         "uid": user_id,
-        "email": res_data["email"],
-        "about": data.about,
+        "email": data.email,
+        "about": data.about if data.about else "",
         "createdAt": firestore.SERVER_TIMESTAMP,
         "last_login": firestore.SERVER_TIMESTAMP,
         "role": "user"
     })
 
     return {
-        "message": "Signup successful",
+        "message": "User created successfully",
         "uid": user_id,
-        "email": res_data["email"],
-        "idToken": res_data["idToken"],
-        "refreshToken": res_data["refreshToken"],
-        "expiresIn": res_data["expiresIn"]
+        "email": data.email
+    }
+
+@router.post("/google-signup")
+def google_signup(data : googleSignUpRequest):
+    user_id = data.uid
+
+    user_doc = db.collection("users").document(user_id)
+    user_doc.set({
+        "uid": user_id,
+        "email": data.email,
+        "name": data.name,
+        "profileImage": data.profileImage,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "last_login": firestore.SERVER_TIMESTAMP,
+        "role": "user"
+    })
+
+    return {
+        "message": "User created successfully",
+        "uid": user_id,
+        "email": data.email
     }
 
 
@@ -133,7 +137,7 @@ def signup_user(data: SignupRequest):
 def get_logged_in_user(request: Request):
     try:
         user_data = verify_token(request)
-        uid = user_data['users'][0]['localId']
+        uid = user_data['uid']
         
         # Get user data from Firestore
         user_doc = db.collection("users").document(uid).get()
@@ -154,7 +158,7 @@ def update_profile(request: Request, update_data: UpdateProfileRequest):
     try:
         # Verify token using existing function
         user_data = verify_token(request)
-        uid = user_data['users'][0]['localId']
+        uid = user_data['uid']
         
         # Find user by email in Firestore
         users_ref = db.collection("users")
@@ -236,3 +240,4 @@ def update_password(data: UpdatePasswordRequest):
         raise HTTPException(status_code=500, detail=f"Request failed: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Update failed: {str(e)}")
+    
