@@ -1,8 +1,18 @@
+import os
 import firebase_admin
 from firebase_admin import credentials
 
+# Write service account JSON from environment variable to a file (for Render)
+service_account_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+if service_account_json:
+    with open("/tmp/firebase-adminsdk.json", "w") as f:
+        f.write(service_account_json)
+    service_account_path = "/tmp/firebase-adminsdk.json"
+else:
+    service_account_path = "config/smartchatai-firebase-adminsdk.json"  # fallback for local dev
+
 if not firebase_admin._apps:
-    cred = credentials.Certificate("config/smartchatai-firebase-adminsdk.json")
+    cred = credentials.Certificate(service_account_path)
     firebase_admin.initialize_app(cred)
 
 from fastapi import FastAPI
