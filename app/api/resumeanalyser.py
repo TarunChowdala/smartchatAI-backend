@@ -183,67 +183,82 @@ async def generate_resume(request : Request,req : genereate_resume_model):
     # print(req, "====req")
     resume_prompt = ""
     if req.resume_type == "jd_resume":
-       resume_prompt = f"""
-        You are a world-class resume builder and career optimization expert.
+        resume_prompt = f"""
+        You are a world-class resume builder used by platforms like Rezi and Kickresume.
 
-        Your task is to generate a clean, complete HTML resume that is **tailored to the job description** while preserving existing experience and structure from the candidate's resume.
+        Your task is to generate a **clean, ATS-optimized HTML resume** tailored to the job description, while preserving the original structure of the candidate's resume.
 
         ---
 
-        ### Key Instructions:
+        📌 **Formatting Instructions**:
+        - Use semantic HTML-like tags:
+        - <h2> for main sections: Contact Information, Professional Summary, Work Experience, Skills, Education, Certifications.
+        - <h3> for job titles, companies, degrees, institutions.
+        - <ul><li> for bullet points like achievements and skills.
+        - Return the final HTML in **a single escaped line inside JSON** (machine-readable and PDF-ready).
 
-        1. Use all relevant information from the candidate's resume.
-        2. You MAY add inferred skills, achievements, tools, or keywords **only if they are strongly suggested by the job description.**
-        3. Highlight or enhance areas that improve alignment with the JD — especially in the summary, skills, and experience sections.
-        4. Do NOT create fake job history or false employers.
-        5. Include all standard sections: Contact Info, Summary, Skills, Experience, Projects, Education, Certifications.
-        6. Take your time to produce a complete and professional resume — no shortcuts or missing content.
-        7. Output must be a **single-line escaped HTML string**, clean, ATS-friendly, and directly usable in frontend or PDF.
-        8. Return only valid JSON in this format:
+        ---
 
+        📄 **Content Rules**:
+        1. Use and keep the candidate's existing information.
+        2. Tailor the resume to the job description using **relevant keywords** in the summary, skills, and experience.
+        3. You may infer tools, skills, and technologies **if they are strongly suggested by the job description**.
+        4. DO NOT fabricate jobs or fake experience.
+        5. Maintain clean and consistent formatting without tables, columns, or images.
+        6. Optimize for ATS systems and human readability.
+
+        ---
+
+        ✅ **Output Format**:
         {{
-        "aiGeneratedResume": "<div>...tailored HTML resume...</div>"
+        "aiGeneratedResume": "<div>...escaped single-line HTML resume...</div>"
         }}
-        Only return a valid JSON object.
-        
-            Do NOT wrap the response in triple backticks (```) or markdown formatting.
-            Do NOT include explanations, commentary, or extra text.
-            Return only clean JSON that can be directly parsed using JSON.parse().
 
+        DO NOT include markdown, explanations, or extra formatting.  
+        Only return valid JSON.
 
         ---
 
         ### Candidate's Resume:
         \"\"\"{req.resume_text}\"\"\"
 
-        ---
-
         ### Job Description:
         \"\"\"{req.job_description}\"\"\"
         """
 
     else:
-        resume_prompt = f"""
-        You are a professional resume editor and formatting expert.
+       resume_prompt = f"""
+        You are an elite resume formatting and grammar expert used by resume apps like Novoresume and Zety.
 
-        Your task is to **enhance the candidate's existing resume** for clarity, formatting, completeness, and presentation — **without adding any fake or new information**.
+        Your task is to enhance the candidate’s resume by improving formatting, structure, clarity, and flow — **without changing or fabricating content**.
 
         ---
 
-        ### Key Instructions:
+        📌 **Formatting Instructions**:
+        - Format in HTML using:
+        - <h2> for sections (Summary, Skills, Work Experience, Education, Certifications).
+        - <h3> for job titles, companies, degrees, etc.
+        - <ul><li> for achievements and lists.
+        - Output should be a **single-line escaped HTML string inside valid JSON**.
 
-        1. Do **not fabricate** or infer new skills, experience, or technologies that aren't clearly in the original resume.
-        2. Keep all original content intact — improve only grammar, structure, formatting, and flow.
-        3. Format the output as a clean, modern resume in semantic HTML.
-        4. Take your time and ensure the output includes **all major resume sections** with no incomplete data.
-        5. Your output should be a **single-line escaped HTML string**, ready for rendering or PDF export.
-        6. Do NOT include markdown, newlines (`\n`), tabs (`\t`), or backticks (`` ` ``).
-        7. Return only valid JSON in this format:
+        ---
 
+        📄 **Content Rules**:
+        1. DO NOT add fake experiences or infer technologies.
+        2. DO NOT alter the job roles or company names.
+        3. ONLY correct grammar, tighten sentence structure, format cleanly, and enhance clarity.
+        4. Ensure no section is left incomplete.
+        5. Optimize spacing, bullet alignment, and tag hierarchy.
+
+        ---
+
+        ✅ **Output Format**:
         {{
-        "aiGeneratedResume": "<div>...clean, enhanced HTML resume...</div>"
+        "aiGeneratedResume": "<div>...clean, enhanced single-line HTML resume...</div>"
         }}
-        Only return a valid JSON object. Do not include explanations, markdown, or commentary.
+
+        Do not return markdown, explanations, or newlines.  
+        Only valid JSON.
 
         ---
 
