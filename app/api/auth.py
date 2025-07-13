@@ -6,10 +6,13 @@ from typing import Optional
 import requests
 from app.db.firestore_client import db
 from firebase_admin import firestore, auth
+from dotenv import load_dotenv
+load_dotenv()
+import os
 
 router = APIRouter()
 
-FIREBASE_API_KEY = "AIzaSyAsKDml88xdad4G1qn1aE1HYgv5HWHManQ"
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
 
 def verify_token(request: Request):
     try:
