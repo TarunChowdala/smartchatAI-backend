@@ -26,14 +26,15 @@ app = FastAPI()
 
 # Configure CORS
 origins = [
-    "http://localhost:3000",     # React default port
-    "http://localhost:5173",     # Vite default port
-    "http://127.0.0.1:3000",    # React alternative
-    "http://127.0.0.1:5173",    # Vite alternative
-    "http://localhost:8000",     # FastAPI default
-    "http://127.0.0.1:8000",    # FastAPI alternative
-    "http://localhost:8080",     # Common development port
-    "http://127.0.0.1:8080",    # Common development port
+    "http://localhost:3000",     
+    "http://localhost:5173", 
+    "http://127.0.0.1:3000",   
+    "http://127.0.0.1:5173",  
+    "http://localhost:8000",  
+    "http://127.0.0.1:8000", 
+    "http://localhost:8080", 
+    "http://127.0.0.1:8080",  
+    "https://smartchataiapp.vercel.app",
 ]
 
 # Add CORS middleware
