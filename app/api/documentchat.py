@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Optional, List, Mapping, Any
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader,
