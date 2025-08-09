@@ -2,15 +2,6 @@ import os
 import firebase_admin
 from firebase_admin import credentials
 
-# Write service account JSON from environment variable to a file (for Render)
-service_account_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-if service_account_json:
-    with open("/tmp/firebase-adminsdk.json", "w") as f:
-        f.write(service_account_json)
-    service_account_path = "/tmp/firebase-adminsdk.json"
-else:
-    raise Exception("GOOGLE_APPLICATION_CREDENTIALS_JSON not set")
-
 if not firebase_admin._apps:
     cred = credentials.Certificate(service_account_path)
     firebase_admin.initialize_app(cred)
@@ -26,14 +17,15 @@ app = FastAPI()
 
 # Configure CORS
 origins = [
-    "http://localhost:3000",     # React default port
-    "http://localhost:5173",     # Vite default port
-    "http://127.0.0.1:3000",    # React alternative
-    "http://127.0.0.1:5173",    # Vite alternative
-    "http://localhost:8000",     # FastAPI default
-    "http://127.0.0.1:8000",    # FastAPI alternative
-    "http://localhost:8080",     # Common development port
-    "http://127.0.0.1:8080",    # Common development port
+    "http://localhost:3000",     
+    "http://localhost:5173", 
+    "http://127.0.0.1:3000",   
+    "http://127.0.0.1:5173",  
+    "http://localhost:8000",  
+    "http://127.0.0.1:8000", 
+    "http://localhost:8080", 
+    "http://127.0.0.1:8080",  
+    "https://smartchataiapp.vercel.app",
 ]
 
 # Add CORS middleware
