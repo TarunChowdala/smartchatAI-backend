@@ -1,2 +1,30 @@
-config/smartchatai-firebase-adminsdk.json
+# Environment files
 .env
+.env.local
+.env.production
+.env.staging
+
+# Firebase configuration files
+config/smartchatai-firebase-adminsdk.json
+config/*.json
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Temporary files
+temp_docs/
+temp_resumes/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

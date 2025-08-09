@@ -2,6 +2,9 @@ import os
 import firebase_admin
 from firebase_admin import credentials
 
+# Import the service account path from firestore_client
+from app.db.firestore_client import service_account_path
+
 if not firebase_admin._apps:
     cred = credentials.Certificate(service_account_path)
     firebase_admin.initialize_app(cred)
