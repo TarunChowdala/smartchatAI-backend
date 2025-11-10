@@ -186,36 +186,65 @@ async def generate_resume(request : Request,req : genereate_resume_model):
         resume_prompt = f"""
         You are a world-class resume builder used by platforms like Rezi and Kickresume.
 
-        Your task is to generate a **clean, ATS-optimized HTML resume** tailored to the job description, while preserving the original structure of the candidate's resume.
-
-        ---
-
-        📌 **Formatting Instructions**:
-        - Use semantic HTML-like tags:
-        - <h2> for main sections: Contact Information, Professional Summary, Work Experience, Skills, Education, Certifications.
-        - <h3> for job titles, companies, degrees, institutions.
-        - <ul><li> for bullet points like achievements and skills.
-        - Return the final HTML in **a single escaped line inside JSON** (machine-readable and PDF-ready).
+        Your task is to extract and structure the candidate's resume data into a clean JSON format, tailored to the job description while preserving the original information.
 
         ---
 
         📄 **Content Rules**:
-        1. Use and keep the candidate's existing information.
-        2. Tailor the resume to the job description using **relevant keywords** in the summary, skills, and experience.
+        1. Extract and use the candidate's existing information from the resume.
+        2. Tailor the summary, skills, and experience descriptions to the job description using **relevant keywords**.
         3. You may infer tools, skills, and technologies **if they are strongly suggested by the job description**.
-        4. DO NOT fabricate jobs or fake experience.
-        5. Maintain clean and consistent formatting without tables, columns, or images.
-        6. Optimize for ATS systems and human readability.
+        4. DO NOT fabricate jobs, fake experience, or add work experiences that don't exist.
+        5. Organize skills into appropriate categories (frontend, backend, database, tools, soft_skills).
+        6. Extract all available information: name, contact details, experience, projects, education, and skills.
+        7. If a field is not available in the resume, use an empty string for strings, empty array for arrays, or empty object for objects.
 
         ---
 
-        ✅ **Output Format**:
+        ✅ **Output Format** - Return ONLY valid JSON in this exact structure:
         {{
-        "aiGeneratedResume": "<div>...escaped single-line HTML resume...</div>"
+          "name": "Full Name",
+          "contact": {{
+            "phone": "phone number or empty string",
+            "email": "email address or empty string",
+            "location": "location or empty string"
+          }},
+          "summary": "Professional summary tailored to job description",
+          "experience": [
+            {{
+              "role": "Job Title",
+              "company": "Company Name",
+              "location": "Location or empty string",
+              "duration": "Duration or empty string",
+              "details": ["Achievement 1", "Achievement 2", ...]
+            }}
+          ],
+          "projects": [
+            {{
+              "title": "Project Title",
+              "link": "URL or empty string (optional)",
+              "details": ["Description 1", "Description 2", ...]
+            }}
+          ],
+          "education": [
+            {{
+              "degree": "Degree Name",
+              "university": "University Name",
+              "duration": "Duration or empty string",
+              "cgpa": "CGPA/GPA or empty string"
+            }}
+          ],
+          "skills": {{
+            "frontend": ["Skill1", "Skill2", ...],
+            "backend": ["Skill1", "Skill2", ...],
+            "database": ["Skill1", "Skill2", ...],
+            "tools": ["Tool1", "Tool2", ...],
+            "soft_skills": ["Skill1", "Skill2", ...]
+          }}
         }}
 
-        DO NOT include markdown, explanations, or extra formatting.  
-        Only return valid JSON.
+        DO NOT include markdown, explanations, code blocks, or extra formatting.  
+        Only return valid JSON that can be parsed directly.
 
         ---
 
@@ -230,35 +259,66 @@ async def generate_resume(request : Request,req : genereate_resume_model):
        resume_prompt = f"""
         You are an elite resume formatting and grammar expert used by resume apps like Novoresume and Zety.
 
-        Your task is to enhance the candidate’s resume by improving formatting, structure, clarity, and flow — **without changing or fabricating content**.
-
-        ---
-
-        📌 **Formatting Instructions**:
-        - Format in HTML using:
-        - <h2> for sections (Summary, Skills, Work Experience, Education, Certifications).
-        - <h3> for job titles, companies, degrees, etc.
-        - <ul><li> for achievements and lists.
-        - Output should be a **single-line escaped HTML string inside valid JSON**.
+        Your task is to extract and structure the candidate's resume data into a clean JSON format, improving clarity and organization — **without changing or fabricating content**.
 
         ---
 
         📄 **Content Rules**:
-        1. DO NOT add fake experiences or infer technologies.
-        2. DO NOT alter the job roles or company names.
-        3. ONLY correct grammar, tighten sentence structure, format cleanly, and enhance clarity.
-        4. Ensure no section is left incomplete.
-        5. Optimize spacing, bullet alignment, and tag hierarchy.
+        1. Extract and use ONLY the candidate's existing information from the resume.
+        2. DO NOT add fake experiences, infer technologies, or fabricate any information.
+        3. DO NOT alter job roles, company names, or any factual information.
+        4. ONLY improve grammar, tighten sentence structure, and enhance clarity in descriptions.
+        5. Organize skills into appropriate categories (frontend, backend, database, tools, soft_skills).
+        6. Extract all available information: name, contact details, experience, projects, education, and skills.
+        7. If a field is not available in the resume, use an empty string for strings, empty array for arrays, or empty object for objects.
+        8. Ensure all sections are properly structured and complete.
 
         ---
 
-        ✅ **Output Format**:
+        ✅ **Output Format** - Return ONLY valid JSON in this exact structure:
         {{
-        "aiGeneratedResume": "<div>...clean, enhanced single-line HTML resume...</div>"
+          "name": "Full Name",
+          "contact": {{
+            "phone": "phone number or empty string",
+            "email": "email address or empty string",
+            "location": "location or empty string"
+          }},
+          "summary": "Professional summary (improved grammar and clarity)",
+          "experience": [
+            {{
+              "role": "Job Title",
+              "company": "Company Name",
+              "location": "Location or empty string",
+              "duration": "Duration or empty string",
+              "details": ["Achievement 1", "Achievement 2", ...]
+            }}
+          ],
+          "projects": [
+            {{
+              "title": "Project Title",
+              "link": "URL or empty string (optional)",
+              "details": ["Description 1", "Description 2", ...]
+            }}
+          ],
+          "education": [
+            {{
+              "degree": "Degree Name",
+              "university": "University Name",
+              "duration": "Duration or empty string",
+              "cgpa": "CGPA/GPA or empty string"
+            }}
+          ],
+          "skills": {{
+            "frontend": ["Skill1", "Skill2", ...],
+            "backend": ["Skill1", "Skill2", ...],
+            "database": ["Skill1", "Skill2", ...],
+            "tools": ["Tool1", "Tool2", ...],
+            "soft_skills": ["Skill1", "Skill2", ...]
+          }}
         }}
 
-        Do not return markdown, explanations, or newlines.  
-        Only valid JSON.
+        Do not return markdown, explanations, code blocks, or extra formatting.  
+        Only return valid JSON that can be parsed directly.
 
         ---
 
