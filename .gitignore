@@ -18,6 +18,11 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv/
+
+# Poetry
+poetry.lock
+.poetry/
 
 # Temporary files
 temp_docs/

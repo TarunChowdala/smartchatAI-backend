@@ -1,40 +1,45 @@
+"""Main FastAPI application."""
 import os
 import firebase_admin
 from firebase_admin import credentials
-
-# Import the service account path from firestore_client
-from app.db.firestore_client import service_account_path
-
-if not firebase_admin._apps:
-    cred = credentials.Certificate(service_account_path)
-    firebase_admin.initialize_app(cred)
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import chat
-from app.api.documentchat import router as documentchat_router
-from app.api.auth import router as auth_router
-from app.api.resumeanalyser import router as resume_analyser
+from app.config import settings
+from app.api.v1 import auth, chat, document, resume
 
-app = FastAPI()
+# Initialize Firebase Admin SDK
+if not firebase_admin._apps:
+    if settings.google_application_credentials_json:
+        import json
+        # Parse JSON string if needed
+        try:
+            cred_data = json.loads(settings.google_application_credentials_json)
+        except (json.JSONDecodeError, TypeError):
+            # If it's already a dict or invalid, use as is
+            cred_data = settings.google_application_credentials_json
+        cred = credentials.Certificate(cred_data)
+    else:
+        service_account_path = settings.google_application_credentials_path
+        if os.path.exists(service_account_path):
+            cred = credentials.Certificate(service_account_path)
+        else:
+            # Don't raise error here - let it fail gracefully if credentials are needed
+            cred = None
+    
+    if cred:
+        firebase_admin.initialize_app(cred)
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    debug=settings.debug
+)
 
 # Configure CORS
-origins = [
-    "http://localhost:3000",     
-    "http://localhost:5173", 
-    "http://127.0.0.1:3000",   
-    "http://127.0.0.1:5173",  
-    "http://localhost:8000",  
-    "http://127.0.0.1:8000", 
-    "http://localhost:8080", 
-    "http://127.0.0.1:8080",  
-    "https://smartchataiapp.vercel.app",
-]
-
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -42,7 +47,24 @@ app.add_middleware(
     max_age=3600,
 )
 
-app.include_router(chat.router, prefix="/chat")
-app.include_router(documentchat_router, prefix="/document")
-app.include_router(auth_router, prefix="/auth")
-app.include_router(resume_analyser, prefix="/resume")
+# Include routers
+app.include_router(auth.router)
+app.include_router(chat.router)
+app.include_router(document.router)
+app.include_router(resume.router)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {
+        "message": "SmartChatAI Backend API",
+        "version": settings.app_version,
+        "status": "running"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
