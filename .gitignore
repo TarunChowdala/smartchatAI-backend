@@ -8,6 +8,8 @@
 config/smartchatai-firebase-adminsdk.json
 config/*.json
 
+app/config/smartchatai-firebase-adminsdk.json
+
 # Python cache files
 __pycache__/
 *.py[cod]
