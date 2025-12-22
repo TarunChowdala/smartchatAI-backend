@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # Firebase Configuration
     firebase_api_key: str = ""
     google_application_credentials_json: Optional[str] = None
-    google_application_credentials_path: str = "config/smartchatai-firebase-adminsdk.json"
+    google_application_credentials_path: str = "app/config/smartchatai-firebase-adminsdk.json"
     
     # Gemini AI Configuration
     gemini_api_key: str = ""

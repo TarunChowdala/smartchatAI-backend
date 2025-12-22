@@ -155,6 +155,187 @@ class ChatService:
         messages.append({"role": "user", "content": message})
         
         return self.ask_gemini(messages)
+    
+    def get_all_sessions(self, user_id: str, limit: int = 50) -> dict:
+        """
+        Get all sessions for a user.
+        
+        Args:
+            user_id: User ID from token
+            limit: Maximum number of sessions to return
+            
+        Returns:
+            List of sessions with metadata
+        """
+        sessions_ref = self.db.collection("sessions")
+        sessions = []
+        
+        try:
+            # Try to query by user_id if sessions have that field
+            query = sessions_ref.where("user_id", "==", user_id).order_by("updated_at", direction=firestore.Query.DESCENDING).limit(limit)
+            session_docs = list(query.stream())
+        except Exception:
+            # If user_id field doesn't exist or query fails, get all and filter
+            # This is less efficient but handles cases where user_id isn't stored
+            all_sessions = sessions_ref.limit(limit * 2).stream()  # Get more to filter
+            session_docs = []
+            for doc in all_sessions:
+                data = doc.to_dict()
+                # Filter by user_id from messages if session doesn't have user_id
+                # Check first message's user_id or session metadata
+                if data.get("user_id") == user_id:
+                    session_docs.append(doc)
+                elif len(session_docs) < limit:
+                    # Check messages to determine ownership
+                    first_msg = doc.reference.collection("messages").limit(1).stream()
+                    for msg in first_msg:
+                        msg_data = msg.to_dict()
+                        if msg_data.get("user_id") == user_id:
+                            session_docs.append(doc)
+                            break
+        
+        # Process sessions and get message counts
+        for session_doc in session_docs[:limit]:
+            session_data = session_doc.to_dict()
+            
+            # Get message count efficiently
+            messages_ref = session_doc.reference.collection("messages")
+            message_count = len(list(messages_ref.stream()))
+            
+            sessions.append({
+                "session_id": session_doc.id,
+                "user_id": session_data.get("user_id"),
+                "created_at": session_data.get("created_at"),
+                "updated_at": session_data.get("updated_at"),
+                "message_count": message_count
+            })
+        
+        return {
+            "sessions": sessions,
+            "count": len(sessions)
+        }
+    
+    def get_session(self, session_id: str, user_id: str) -> dict:
+        """
+        Get session information.
+        
+        Args:
+            session_id: Session identifier
+            user_id: User ID from token (for verification)
+            
+        Returns:
+            Session data
+            
+        Raises:
+            HTTPException: If session not found
+        """
+        session_ref = self.db.collection("sessions").document(session_id)
+        session_doc = session_ref.get()
+        
+        if not session_doc.exists:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        session_data = session_doc.to_dict()
+        
+        # Get message count
+        messages_ref = session_ref.collection("messages")
+        message_count = len(list(messages_ref.stream()))
+        
+        return {
+            "session_id": session_id,
+            "user_id": session_data.get("user_id"),
+            "created_at": session_data.get("created_at"),
+            "updated_at": session_data.get("updated_at"),
+            "message_count": message_count
+        }
+    
+    def get_messages(self, session_id: str, user_id: str, limit: int = 50) -> dict:
+        """
+        Get messages for a session.
+        
+        Args:
+            session_id: Session identifier
+            user_id: User ID from token (for verification)
+            limit: Maximum number of messages to return
+            
+        Returns:
+            Messages list
+            
+        Raises:
+            HTTPException: If session not found
+        """
+        session_ref = self.db.collection("sessions").document(session_id)
+        session_doc = session_ref.get()
+        
+        if not session_doc.exists:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Get messages ordered by timestamp
+        messages_ref = session_ref.collection("messages")
+        query = messages_ref.order_by("timestamp", direction=firestore.Query.ASCENDING).limit(limit)
+        results = query.stream()
+        
+        messages = []
+        for msg in results:
+            data = msg.to_dict()
+            messages.append({
+                "id": msg.id,
+                "sender": data.get("sender"),
+                "content": data.get("content"),
+                "timestamp": data.get("timestamp")
+            })
+        
+        return {
+            "session_id": session_id,
+            "messages": messages,
+            "count": len(messages)
+        }
+    
+    def delete_session(self, session_id: str, user_id: str) -> dict:
+        """
+        Delete chat session and all its messages.
+        
+        Args:
+            session_id: Session identifier
+            user_id: User ID from token (for verification)
+            
+        Returns:
+            Deletion confirmation
+            
+        Raises:
+            HTTPException: If session not found
+        """
+        session_ref = self.db.collection("sessions").document(session_id)
+        session_doc = session_ref.get()
+        
+        if not session_doc.exists:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Verify ownership if user_id is stored in session
+        session_data = session_doc.to_dict()
+        if session_data.get("user_id") and session_data.get("user_id") != user_id:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="Not authorized to delete this session")
+        
+        # Delete all messages in subcollection
+        messages_ref = session_ref.collection("messages")
+        messages = messages_ref.stream()
+        deleted_count = 0
+        for msg in messages:
+            msg.reference.delete()
+            deleted_count += 1
+        
+        # Delete session document
+        session_ref.delete()
+        
+        return {
+            "message": "Session deleted successfully",
+            "session_id": session_id,
+            "messages_deleted": deleted_count
+        }
 
 
 # Singleton instance
