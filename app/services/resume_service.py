@@ -143,12 +143,12 @@ class ResumeService:
             ---
 
             ### Candidate Resume:
-            \"\"\"{resume_text}\"\"\"
+            {resume_text}
 
             ---
 
             ### Job Description:
-            \"\"\"{job_description}\"\"\"
+            {job_description}
             """
         
         analysis_result = self.call_gemini_api(analysis_prompt, timeout=60)
@@ -177,76 +177,148 @@ class ResumeService:
         """
         if resume_type == "jd_resume":
             resume_prompt = f"""
-        You are a world-class resume builder used by platforms like Rezi and Kickresume.
+        You are a world-class resume builder and ATS optimization engine used by platforms like Rezi, Kickresume, and Novoresume.
 
-        Your task is to extract and structure the candidate's resume data into a clean JSON format, tailored to the job description while preserving the original information.
+        Your task is to extract, normalize, and restructure the candidate’s resume into a **clean, professional, design-agnostic JSON format**, optimized for the given job description.
 
-        ---
-
-        📄 **Content Rules**:
-        1. Extract and use the candidate's existing information from the resume.
-        2. Tailor the summary, skills, and experience descriptions to the job description using **relevant keywords**.
-        3. You may infer tools, skills, and technologies **if they are strongly suggested by the job description**.
-        4. DO NOT fabricate jobs, fake experience, or add work experiences that don't exist.
-        5. Organize skills into appropriate categories (frontend, backend, database, tools, soft_skills).
-        6. Extract all available information: name, contact details, experience, projects, education, and skills.
-        7. If a field is not available in the resume, use an empty string for strings, empty array for arrays, or empty object for objects.
+        You must preserve factual accuracy while improving clarity, impact, and keyword alignment.
 
         ---
 
-        ✅ **Output Format** - Return ONLY valid JSON in this exact structure:
+        ## 📄 CONTENT RULES (STRICT)
+
+        1. Extract and use ONLY the candidate’s existing information from the resume.
+        2. Tailor the **summary, experience highlights, and skills** to the job description using relevant keywords.
+        3. You MAY infer tools, technologies, or skills ONLY if:
+        - They are strongly implied by the resume OR
+        - Explicitly required by the job description and clearly aligned with the candidate’s background.
+        4. DO NOT fabricate:
+        - Companies
+        - Job titles
+        - Employment dates
+        - Degrees or certifications
+        5. Improve bullet points by:
+        - Using strong action verbs
+        - Focusing on impact and outcomes
+        - Keeping them concise and ATS-friendly
+        6. Normalize all dates to **YYYY-MM** format when possible.
+        7. Organize skills into clear, categorized groups.
+        8. If a field is missing:
+        - Use empty string for strings
+        - Empty array for lists
+        - Empty object for objects
+        9. Output must be **pure JSON only**, no markdown, no explanations.
+
+        ---
+
+        ## ✅ OUTPUT FORMAT (STRICT — DO NOT DEVIATE)
+
+        Return ONLY valid JSON in the following structure:
+
         {{
-          "name": "Full Name",
-          "contact": {{
-            "phone": "phone number or empty string",
-            "email": "email address or empty string",
-            "location": "location or empty string"
-          }},
-          "summary": "Professional summary tailored to job description",
-          "experience": [
-            {{
-              "role": "Job Title",
-              "company": "Company Name",
-              "location": "Location or empty string",
-              "duration": "Duration or empty string",
-              "details": ["Achievement 1", "Achievement 2", ...]
+        "basics": {{
+            "full_name": "",
+            "title": "",
+            "location": {{
+            "city": "",
+            "region": "",
+            "country": ""
+            }},
+            "contact": {{
+            "email": "",
+            "phone": "",
+            "linkedin": "",
+            "github": "",
+            "portfolio": ""
             }}
-          ],
-          "projects": [
+        }},
+        "summary": {{
+            "headline": "",
+            "highlights": ["..."]
+        }},
+        "experience": [
             {{
-              "title": "Project Title",
-              "link": "URL or empty string (optional)",
-              "details": ["Description 1", "Description 2", ...]
+            "company": "",
+            "role": "",
+            "location": "",
+            "employment_type": "",
+            "start_date": "YYYY-MM",
+            "end_date": "YYYY-MM or null",
+            "is_current": false,
+            "summary": "",
+            "highlights": ["..."],
+            "tech_stack": ["..."]
             }}
-          ],
-          "education": [
+        ],
+        "projects": [
             {{
-              "degree": "Degree Name",
-              "university": "University Name",
-              "duration": "Duration or empty string",
-              "cgpa": "CGPA/GPA or empty string"
+            "name": "",
+            "type": "",
+            "link": "",
+            "description": "",
+            "highlights": ["..."],
+            "tech_stack": ["..."]
             }}
-          ],
-          "skills": {{
-            "frontend": ["Skill1", "Skill2", ...],
-            "backend": ["Skill1", "Skill2", ...],
-            "database": ["Skill1", "Skill2", ...],
-            "tools": ["Tool1", "Tool2", ...],
-            "soft_skills": ["Skill1", "Skill2", ...]
-          }}
+        ],
+        "education": [
+            {{
+            "institution": "",
+            "degree": "",
+            "location": "",
+            "start_date": "YYYY-MM",
+            "end_date": "YYYY-MM",
+            "gpa": "",
+            "highlights": ["..."]
+            }}
+        ],
+        "skills": {{
+            "categories": [
+            {{
+                "name": "Frontend",
+                "items": ["..."]
+            }},
+            {{
+                "name": "Backend",
+                "items": ["..."]
+            }},
+            {{
+                "name": "Database",
+                "items": ["..."]
+            }},
+            {{
+                "name": "Cloud & DevOps",
+                "items": ["..."]
+            }},
+            {{
+                "name": "Tools & Platforms",
+                "items": ["..."]
+            }},
+            {{
+                "name": "Soft Skills",
+                "items": ["..."]
+            }}
+            ]
+        }},
+        "certifications": ["..."],
+        "achievements": ["..."],
+        "metadata": {{
+            "target_role": "",
+            "experience_level": "",
+            "resume_version": ""
+        }}
         }}
 
-        DO NOT include markdown, explanations, code blocks, or extra formatting.  
-        Only return valid JSON that can be parsed directly.
+        ---
+
+        ### Candidate Resume:
+        {resume_text}
 
         ---
 
-        ### Candidate's Resume:
-        \"\"\"{resume_text}\"\"\"
-
         ### Job Description:
-        \"\"\"{job_description}\"\"\"
-        """
+        {job_description}
+    """
+
         else:
             resume_prompt = f"""
         You are an elite resume formatting and grammar expert used by resume apps like Novoresume and Zety.
@@ -315,7 +387,7 @@ class ResumeService:
         ---
 
         ### Original Resume:
-        \"\"\"{resume_text}\"\"\"
+        {resume_text}
         """
         
         result = self.call_gemini_api(resume_prompt, timeout=60)
