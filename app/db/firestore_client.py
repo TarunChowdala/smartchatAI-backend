@@ -1,5 +1,6 @@
 """Firestore database client initialization."""
 import os
+import json
 from google.cloud import firestore
 from google.oauth2 import service_account
 from app.config import settings
@@ -17,8 +18,16 @@ def get_firestore_db() -> firestore.Client:
     
     if service_account_json:
         service_account_path = "/tmp/firebase-adminsdk.json"
+        
+        # Handle both string and dict formats
+        if isinstance(service_account_json, str):
+            json_content = service_account_json
+        else:
+            # It's a dict, convert to JSON string
+            json_content = json.dumps(service_account_json)
+        
         with open(service_account_path, "w") as f:
-            f.write(service_account_json)
+            f.write(json_content)
     else:
         service_account_path = settings.google_application_credentials_path
     
