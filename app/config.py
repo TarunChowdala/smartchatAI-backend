@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -40,9 +41,18 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     gemini_api_url: str = "https://generativelanguage.googleapis.com/v1beta/models"
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Read JSON credentials directly from env to avoid pydantic parsing issues
+        # This ensures we get the raw string, not a parsed dict
+        env_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        if env_json:
+            self.google_application_credentials_json = env_json
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra environment variables
 
 
 settings = Settings()
