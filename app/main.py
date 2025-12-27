@@ -11,8 +11,7 @@ from app.api.v1 import auth, chat, document, resume
 if not firebase_admin._apps:
     import json
     
-    # Read JSON directly from environment variable (bypass pydantic)
-    service_account_json_str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    service_account_json_str = settings.google_application_credentials_json
     
     if service_account_json_str:
         try:
@@ -22,16 +21,10 @@ if not firebase_admin._apps:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
     else:
-        # Fall back to file path
+        # Fall back to file path for local development
         default_path = "app/config/smartchatai-firebase-adminsdk.json"
-        service_account_path = settings.google_application_credentials_path
-        
-        # If path looks corrupted (JSON), use default
-        if not isinstance(service_account_path, str) or service_account_path.startswith('{') or len(service_account_path) > 500:
-            service_account_path = default_path
-        
-        if os.path.exists(service_account_path):
-            cred = credentials.Certificate(service_account_path)
+        if os.path.exists(default_path):
+            cred = credentials.Certificate(default_path)
         else:
             # Don't raise error here - let it fail gracefully if credentials are needed
             cred = None

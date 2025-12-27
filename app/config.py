@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
-import os
 
 
 class Settings(BaseSettings):
@@ -9,7 +8,6 @@ class Settings(BaseSettings):
     # Firebase Configuration
     firebase_api_key: str = ""
     google_application_credentials_json: Optional[str] = None
-    google_application_credentials_path: str = "app/config/smartchatai-firebase-adminsdk.json"
     
     # Gemini AI Configuration
     gemini_api_key: str = ""
@@ -25,10 +23,6 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
         "https://smartchataiapp.vercel.app",
     ]
     
@@ -41,18 +35,9 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     gemini_api_url: str = "https://generativelanguage.googleapis.com/v1beta/models"
     
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Read JSON credentials directly from env to avoid pydantic parsing issues
-        # This ensures we get the raw string, not a parsed dict
-        env_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-        if env_json:
-            self.google_application_credentials_json = env_json
-    
     class Config:
         env_file = ".env"
         case_sensitive = False
-        extra = "ignore"  # Ignore extra environment variables
 
 
 settings = Settings()

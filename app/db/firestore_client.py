@@ -13,8 +13,8 @@ def get_firestore_db() -> firestore.Client:
     Returns:
         Firestore Client instance
     """
-    # Read JSON directly from environment variable (bypass pydantic)
-    service_account_json_str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    # Read JSON from settings (which reads from env)
+    service_account_json_str = settings.google_application_credentials_json
     
     if service_account_json_str:
         try:
@@ -24,24 +24,7 @@ def get_firestore_db() -> firestore.Client:
         
         cred = service_account.Credentials.from_service_account_info(cred_info)
     else:
-        # Fall back to file path - use hardcoded default to avoid pydantic corruption
-        default_path = "app/config/smartchatai-firebase-adminsdk.json"
-        
-        # Try settings first, but validate it's not corrupted
-        service_account_path = settings.google_application_credentials_path
-        
-        # If path looks corrupted (JSON), use default
-        if not isinstance(service_account_path, str) or service_account_path.startswith('{') or len(service_account_path) > 500:
-            service_account_path = default_path
-        
-        if not os.path.exists(service_account_path):
-            raise FileNotFoundError(
-                f"Firebase credentials file not found at {service_account_path}. "
-                f"Set GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable or ensure file exists."
-            )
-        
-        cred = service_account.Credentials.from_service_account_file(service_account_path)
-    
+      raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable is not set")
     return firestore.Client(credentials=cred)
 
 
