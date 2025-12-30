@@ -4,8 +4,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 from fastapi import HTTPException, BackgroundTasks
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from app.core.gemini_embeddings import GeminiEmbeddings
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader,
@@ -31,12 +31,8 @@ class DocumentService:
         self.temp_dir = settings.temp_docs_dir
         self.db = get_firestore_db()
         
-        # Initialize embeddings once (reused for all operations)
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
-        )
+        # Initialize embeddings using Gemini API 
+        self.embeddings = GeminiEmbeddings()
         
         # Storage: key format is "user_id_document_id" for multi-user support
         self.vectorstores: dict[str, FAISS] = {}
