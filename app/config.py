@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     max_upload_size: int = 10 * 1024 * 1024  # 10MB
     temp_docs_dir: str = "temp_docs"
     temp_resumes_dir: str = "temp_resumes"
+    vectorstores_dir: str = "vectorstores"  # Directory for persistent FAISS vectorstores
     
     # Gemini Model Configuration
     gemini_model: str = "gemini-2.5-flash"

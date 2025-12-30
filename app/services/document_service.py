@@ -31,7 +31,7 @@ class DocumentService:
         self.temp_dir = settings.temp_docs_dir
         self.db = get_firestore_db()
         
-        # Initialize embeddings using Gemini API 
+        # Initialize embeddings using Gemini API (lightweight, no PyTorch needed)
         self.embeddings = GeminiEmbeddings()
         
         # Storage: key format is "user_id_document_id" for multi-user support

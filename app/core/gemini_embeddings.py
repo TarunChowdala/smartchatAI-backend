@@ -1,10 +1,11 @@
 """Gemini Embeddings for document search - lightweight alternative to sentence-transformers."""
 import requests
 from typing import List
+from langchain_core.embeddings import Embeddings
 from app.config import settings
 
 
-class GeminiEmbeddings:
+class GeminiEmbeddings(Embeddings):
     """
     Lightweight embeddings using Gemini API.
     Compatible with langchain's embedding interface.

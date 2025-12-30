@@ -133,3 +133,18 @@ async def chat(
     
     return result
 
+
+@router.post("/cleanup")
+@handle_exceptions
+async def cleanup_orphaned_vectorstores(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Clean up orphaned vectorstores (vectorstores without corresponding documents).
+    
+    This helps free up disk space by removing vectorstores for deleted documents.
+    Only accessible to authenticated users.
+    """
+    result = document_service.cleanup_orphaned_vectorstores()
+    return result
+
