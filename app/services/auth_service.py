@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from firebase_admin import firestore
 from app.config import settings
 from app.db.firestore_client import get_firestore_db
+from app.core.security import decrypt_password
 from app.models.schemas import (
     LoginRequest,
     SignupRequest,
@@ -33,10 +34,13 @@ class AuthService:
         Raises:
             HTTPException: If credentials are invalid
         """
+        # Decrypt password from frontend
+        decrypted_password = decrypt_password(data.password)
+        
         url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={self.firebase_api_key}"
         payload = {
             "email": data.email,
-            "password": data.password,
+            "password": decrypted_password,
             "returnSecureToken": True
         }
         
@@ -72,6 +76,9 @@ class AuthService:
         Returns:
             Signup response with user info
         """
+        # Decrypt password from frontend
+        decrypted_password = decrypt_password(data.password)
+        
         user_id = data.uid
         
         user_doc = self.db.collection("users").document(user_id)
@@ -79,10 +86,11 @@ class AuthService:
             "name": data.name,
             "uid": user_id,
             "email": data.email,
+            "password": decrypted_password,
             "about": data.about if data.about else "",
             "createdAt": firestore.SERVER_TIMESTAMP,
             "last_login": firestore.SERVER_TIMESTAMP,
-            "role": "user"
+            "role": "user",
         })
         
         return {
@@ -197,11 +205,15 @@ class AuthService:
         Raises:
             HTTPException: If current password is incorrect or update fails
         """
+        # Decrypt passwords from frontend
+        decrypted_current_password = decrypt_password(data.current_password)
+        decrypted_new_password = decrypt_password(data.new_password)
+        
         # First, sign in with current password to get a fresh token
         sign_in_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={self.firebase_api_key}"
         sign_in_response = requests.post(sign_in_url, json={
             "email": data.email,
-            "password": data.current_password,
+            "password": decrypted_current_password,
             "returnSecureToken": True
         })
         
@@ -215,7 +227,7 @@ class AuthService:
         update_url = f"https://identitytoolkit.googleapis.com/v1/accounts:update?key={self.firebase_api_key}"
         update_response = requests.post(update_url, json={
             "idToken": fresh_token,
-            "password": data.new_password,
+            "password": decrypted_new_password,
             "returnSecureToken": True
         })
         
