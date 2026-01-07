@@ -18,7 +18,7 @@ class GeminiEmbeddings(Embeddings):
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
-        Embed a list of documents.
+        Embed a list of documents using batch API.
         
         Args:
             texts: List of text strings to embed
@@ -26,11 +26,59 @@ class GeminiEmbeddings(Embeddings):
         Returns:
             List of embedding vectors
         """
-        embeddings = []
-        for text in texts:
-            embedding = self._embed_text(text)
-            embeddings.append(embedding)
-        return embeddings
+        # Gemini supports up to 100 texts per batch
+        batch_size = 100
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            batch_embeddings = self._embed_batch(batch)
+            all_embeddings.extend(batch_embeddings)
+        
+        return all_embeddings
+    
+    def _embed_batch(self, texts: List[str]) -> List[List[float]]:
+        """
+        Embed a batch of texts in a single API call.
+        
+        Args:
+            texts: List of text strings to embed (max 100)
+            
+        Returns:
+            List of embedding vectors
+        """
+        try:
+            headers = {
+                "x-goog-api-key": self.api_key,
+                "Content-Type": "application/json"
+            }
+            
+            # Batch embedding request
+            json_body = {
+                "requests": [
+                    {
+                        "model": f"models/{self.embedding_model}",
+                        "content": {"parts": [{"text": text}]}
+                    }
+                    for text in texts
+                ]
+            }
+            
+            response = requests.post(
+                f"{settings.gemini_api_url}:batchEmbedContents",
+                headers=headers,
+                json=json_body,
+                timeout=60  # Longer timeout for batch
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            # Extract embeddings from batch response
+            return [emb["embedding"]["values"] for emb in result["embeddings"]]
+        except requests.exceptions.RequestException as e:
+            # Fallback to sequential if batch fails
+            print(f"Batch embedding failed, falling back to sequential: {e}")
+            return [self._embed_text(text) for text in texts]
     
     def embed_query(self, text: str) -> List[float]:
         """

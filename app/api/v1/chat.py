@@ -8,7 +8,7 @@ from app.decorators import handle_exceptions
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-@router.post("/send-message", response_model=MessageResponse)
+@router.post("/send-message", response_model=dict)
 @handle_exceptions
 async def send_message(
     data: MessageInput,
@@ -22,14 +22,15 @@ async def send_message(
         current_user: Current user data from token (dependency injection)
         
     Returns:
-        AI response message
+        AI response message and session_id
     """
-    reply = chat_service.send_message(
-        user_id=data.user_id,
+    result = chat_service.send_message(
+        user_id=current_user["uid"],
         message=data.message,
-        session_id=data.session_id
+        session_id=data.session_id,
+        model_name=data.model_name
     )
-    return {"reply": reply}
+    return result
 
 
 @router.get("/sessions", response_model=SessionsListResponse)

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+body {
+  width: 210mm;
+  margin: auto;
+  padding: 28px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11.5pt;
+  color: #111;
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 24pt;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 11pt;
+  color: #555;
+}
+
+h2 {
+  font-size: 14pt;
+  margin-top: 20px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4px;
+}
+
+.section { margin-top: 16px; }
+.item { margin-bottom: 12px; }
+.title { font-weight: bold; }
+
+.meta {
+  font-size: 10.5pt;
+  color: #444;
+}
+
+ul {
+  padding-left: 16px;
+  margin: 6px 0;
+}
+
+li { margin-bottom: 4px; }
+
+.skills span {
+  display: inline-block;
+  margin-right: 10px;
+  margin-bottom: 4px;
+}
+</style>
+</head>
+<body>
+
+<h1>{{ basics.full_name }}</h1>
+<div class="subtitle">
+  {{ basics.title }} • {{ basics.location.city }}, {{ basics.location.region }}, {{ basics.location.country }}
+</div>
+<div class="meta">
+  {{ basics.contact.email }} | {{ basics.contact.phone }}
+</div>
+
+<div class="section">
+<h2>Summary</h2>
+<ul>
+  {% for h in summary.highlights %}
+    <li>{{ h }}</li>
+  {% endfor %}
+</ul>
+</div>
+
+<div class="section">
+<h2>Experience</h2>
+{% for exp in experience %}
+<div class="item">
+  <div class="title">{{ exp.role }} — {{ exp.company }}</div>
+  <div class="meta">{{ exp.location }} | {{ exp.start_date }} – {{ exp.end_date or "Present" }}</div>
+  <ul>
+    {% for h in exp.highlights %}
+      <li>{{ h }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+</div>
+
+<div class="section">
+<h2>Projects</h2>
+{% for p in projects %}
+<div class="item">
+  <div class="title">{{ p.name }} ({{ p.type }})</div>
+  <ul>
+    {% for h in p.highlights %}
+      <li>{{ h }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+</div>
+
+<div class="section">
+<h2>Skills</h2>
+{% for cat in skills.categories %}
+<p><strong>{{ cat.name }}:</strong> {{ cat['items'] | join(", ") }}</p>
+{% endfor %}
+</div>
+
+</body>
+</html>
+
+

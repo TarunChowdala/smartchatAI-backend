@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+body {
+  width: 210mm;
+  margin: auto;
+  font-family: Arial, sans-serif;
+  font-size: 11.5pt;
+}
+
+.header {
+  background: #111;
+  color: #fff;
+  padding: 22px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 26pt;
+}
+
+.header p {
+  margin: 4px 0 0;
+  font-size: 10.5pt;
+}
+
+.section {
+  padding: 20px;
+}
+
+h2 {
+  font-size: 14pt;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 6px;
+}
+
+ul { padding-left: 16px; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>{{ basics.full_name }}</h1>
+  <p>{{ basics.title }} • {{ basics.location.city }}, {{ basics.location.region }}</p>
+  <p>{{ basics.contact.email }} | {{ basics.contact.phone }}</p>
+</div>
+
+<div class="section">
+
+<h2>Summary</h2>
+<ul>
+{% for h in summary.highlights %}
+  <li>{{ h }}</li>
+{% endfor %}
+</ul>
+
+<h2>Experience</h2>
+{% for exp in experience %}
+<p><strong>{{ exp.role }}</strong> — {{ exp.company }}</p>
+<p>{{ exp.location }} | {{ exp.start_date }} – {{ exp.end_date or "Present" }}</p>
+<ul>
+{% for h in exp.highlights %}
+  <li>{{ h }}</li>
+{% endfor %}
+</ul>
+{% endfor %}
+
+<h2>Projects</h2>
+{% for p in projects %}
+<p><strong>{{ p.name }}</strong></p>
+<ul>
+{% for h in p.highlights %}
+  <li>{{ h }}</li>
+{% endfor %}
+</ul>
+{% endfor %}
+
+<h2>Skills</h2>
+{% for cat in skills.categories %}
+<p><strong>{{ cat.name }}:</strong> {{ cat['items'] | join(", ") }}</p>
+{% endfor %}
+
+</div>
+</body>
+</html>
+
+

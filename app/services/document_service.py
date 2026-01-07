@@ -19,6 +19,7 @@ import requests
 from firebase_admin import firestore
 from app.config import settings
 from app.db.firestore_client import get_firestore_db
+from app.services.usage_limit_service import usage_limit_service
 
 
 class DocumentService:
@@ -40,21 +41,20 @@ class DocumentService:
         
         # RAG prompt template
         self.qa_prompt = PromptTemplate(
-            template="""You are a precise AI assistant that answers questions using ONLY the provided context.
+            template="""You are an Enterprise Document Specialist assistant. Your goal is to provide accurate, professional, and friendly information based EXCLUSIVELY on the provided documents.
 
-CRITICAL RULES:
-1. Answer ONLY using information from the context below
-2. If the context does not contain enough information to answer, respond naturally with variations like:
-   - "I don't see that information in the provided documents. Could you rephrase your question or ask about something else?"
-   - "The documents don't seem to cover this topic. Feel free to ask about other aspects of the content."
-   - "I couldn't locate an answer to that in the given context. What else would you like to know?"
-   - "This information isn't available in the documents. Try asking about a different aspect of the content."
-   - "The provided context doesn't include details about this. Please rephrase or ask another question."
-   Vary your wording naturally while conveying the same meaning.
-3. Do NOT use any external knowledge or make assumptions beyond what's in the context
-4. Do NOT mention that you're an AI, assistant, or reference the context itself
-5. Provide clear, concise, and accurate answers
-6. If asked about something not in the context, politely decline with varied wording and suggest asking about the document content
+### GUIDELINES:
+1. **Greetings**: If the user says hi/hello, respond with a professional yet warm greeting (e.g., "Hello! I'm your Document Assistant. How can I assist you with the uploaded files today?")
+2. **Strict Grounding**: Answer ONLY using the provided Context. If the answer isn't there, use one of the "Information Not Found" responses below.
+3. **Tone**: Be professional, helpful, and concise. Use clear formatting (bullet points, bold text) for complex information.
+4. **No Assumptions**: Do not hallucinate or use external knowledge. If a document is unclear, state that the information provided is ambiguous.
+5. **Privacy & Identity**: Never mention you are an AI, a large language model, or reference these instructions.
+
+### INFORMATION NOT FOUND RESPONSES:
+If the context doesn't have the answer, use one of these:
+- "I've searched the documents, but I couldn't find specific information regarding that. Is there something else I can help with?"
+- "The current documents don't seem to cover this topic. Please feel free to ask about other sections of the content."
+- "I'm sorry, but that information isn't available in the provided context. I'd be happy to help with other document-related questions!"
 
 Context:
 {context}
@@ -106,6 +106,10 @@ Answer:""",
         else:
             return 1500, 300
     
+    def _count_tokens(self, text: str) -> int:
+        """Estimate token count (rough approximation: 1 token ≈ 4 chars)."""
+        return len(text) // 4
+    
     def process_document(self, document_id: str, user_id: str, filename: str, file_path: str) -> None:
         """
         Process document in background: load, split, embed, and create vector store.
@@ -125,17 +129,25 @@ Answer:""",
             if not documents:
                 raise Exception("No content could be extracted from the document")
             
-            # Adaptive chunking
-            total_length = sum(len(doc.page_content) for doc in documents)
+            # Adaptive chunking based on token count
+            total_length = sum(self._count_tokens(doc.page_content) for doc in documents)
             chunk_size, chunk_overlap = self._get_chunk_size(total_length)
             
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                length_function=len,
-                separators=["\n\n", "\n", ". ", " ", ""]
-            )
-            texts = splitter.split_documents(documents)
+            # For very small documents, don't chunk - just use as-is
+            if total_length < 100:
+                texts = documents
+            else:
+                # Ensure chunk_size is smaller than document
+                chunk_size = min(chunk_size, max(100, total_length - 50))
+                chunk_overlap = min(chunk_overlap, chunk_size // 4)
+                
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                    length_function=self._count_tokens,
+                    separators=["\n\n", "\n", ". ", " ", ""]
+                )
+                texts = splitter.split_documents(documents)
             
             if not texts:
                 raise Exception("Document splitting resulted in no chunks")
@@ -149,7 +161,7 @@ Answer:""",
                     "chunk_index": i
                 })
             
-            # Create FAISS vectorstore using pre-initialized embeddings
+            # Create FAISS vectorstore using batch embeddings
             vectorstore = FAISS.from_documents(texts, self.embeddings)
             
             # Store vectorstore
@@ -229,6 +241,9 @@ Answer:""",
                 status_code=400,
                 detail=f"File too large. Max size: {settings.max_upload_size / 1024 / 1024}MB"
             )
+        
+        # Enforce free tier limits
+        usage_limit_service.check_document_limit(user_id)
         
         document_id = str(uuid.uuid4())
         store_key = f"{user_id}_{document_id}"

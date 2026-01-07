@@ -5,7 +5,7 @@ from firebase_admin import credentials
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.api.v1 import auth, chat, document, resume
+from app.api.v1 import auth, chat, document, resume, usage, help
 
 # Initialize Firebase Admin SDK
 if not firebase_admin._apps:
@@ -55,6 +55,8 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(document.router)
 app.include_router(resume.router)
+app.include_router(usage.router)
+app.include_router(help.router)
 
 
 @app.get("/")

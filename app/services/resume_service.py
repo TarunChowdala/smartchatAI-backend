@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from langchain_community.document_loaders import PyPDFLoader
 import requests
 from app.config import settings
+from app.services.usage_limit_service import usage_limit_service
 
 
 class ResumeService:
@@ -98,17 +99,21 @@ class ResumeService:
                 detail="Unexpected Gemini API response format"
             )
     
-    def analyze_resume(self, resume_text: str, job_description: str) -> dict:
+    def analyze_resume(self, resume_text: str, job_description: str, user_id: str) -> dict:
         """
         Analyze resume against job description.
         
         Args:
             resume_text: Extracted resume text
             job_description: Job description text
+            user_id: User ID for usage limits
             
         Returns:
             Analysis result dictionary
         """
+        # Check usage limit
+        usage_limit_service.check_resume_limit(user_id)
+        
         analysis_prompt = f"""
             You are a world-class resume analysis and career optimization expert.
 
@@ -154,19 +159,23 @@ class ResumeService:
         analysis_result = self.call_gemini_api(analysis_prompt, timeout=60)
         cleaned_result = re.sub(r"^```(json)?|```$", "", analysis_result, flags=re.IGNORECASE).strip()
         
+        # Increment usage count
+        usage_limit_service.increment_resume_count(user_id)
+        
         return {
             "analysis": cleaned_result,
             "resume_text": resume_text,
             "job_description": job_description
         }
     
-    def generate_resume(self, resume_type: str, resume_text: str, job_description: str = "") -> dict:
+    def generate_resume(self, resume_type: str, resume_text: str, user_id: str, job_description: str = "") -> dict:
         """
         Generate/formatted resume JSON.
         
         Args:
             resume_type: Type of resume generation ("jd_resume" or other)
             resume_text: Original resume text
+            user_id: User ID for usage limits
             job_description: Job description (for JD-tailored resumes)
             
         Returns:
@@ -175,6 +184,9 @@ class ResumeService:
         Raises:
             HTTPException: If generation fails
         """
+        # Check usage limit
+        usage_limit_service.check_resume_limit(user_id)
+        
         if resume_type == "jd_resume":
             resume_prompt = f"""
         You are a world-class resume builder and ATS optimization engine used by platforms like Rezi, Kickresume, and Novoresume.
@@ -393,6 +405,9 @@ class ResumeService:
         result = self.call_gemini_api(resume_prompt, timeout=60)
         cleaned_result = result.strip()
         cleaned_result = re.sub(r"^```(json)?|```$", "", cleaned_result, flags=re.IGNORECASE).strip()
+        
+        # Increment usage count
+        usage_limit_service.increment_resume_count(user_id)
         
         try:
             return json.loads(cleaned_result)

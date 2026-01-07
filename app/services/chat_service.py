@@ -3,6 +3,7 @@ import requests
 from app.config import settings
 from app.db.firestore_client import get_firestore_db
 from firebase_admin import firestore
+from app.services.usage_limit_service import usage_limit_service
 
 
 class ChatService:
@@ -137,7 +138,7 @@ class ChatService:
         else:
             return f"Error: {resp.status_code} - {resp.text}"
     
-    def send_message(self, user_id: str, message: str, session_id: str) -> str:
+    def send_message(self, user_id: str, message: str, session_id: str = None, model_name: str = None) -> dict:
         """
         Process chat message and get AI response.
         
@@ -145,16 +146,69 @@ class ChatService:
             user_id: User ID
             message: User message
             session_id: Chat session ID
+            model_name: Optional model name to use
             
         Returns:
-            AI response text
+            Dictionary with AI response text and session_id
         """
+        # Generate session_id if not provided
+        if not session_id:
+            import uuid
+            session_id = str(uuid.uuid4())
+
+        # Check session and message limits
+        session_ref = self.db.collection("sessions").document(session_id)
+        session_doc = session_ref.get()
+        
+        if not session_doc.exists:
+            # New session - check session count limit
+            usage_limit_service.check_session_limit(user_id)
+            # Create session document
+            session_ref.set({
+                "user_id": user_id,
+                "model_name": model_name or self.model,
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "updated_at": firestore.SERVER_TIMESTAMP
+            })
+        else:
+            # Existing session - check message count limit
+            usage_limit_service.check_message_limit(session_id, user_id)
+            # Update session timestamp and optionally model
+            update_data = {"updated_at": firestore.SERVER_TIMESTAMP}
+            if model_name:
+                update_data["model_name"] = model_name
+            session_ref.update(update_data)
+            
+        # Save user message to Firestore
+        messages_ref = session_ref.collection("messages")
+        messages_ref.add({
+            "sender": "user",
+            "content": message,
+            "user_id": user_id,
+            "model_name": model_name or self.model,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+
         user_name = self.get_user_name(user_id)
         history = self.get_last_10_messages(session_id)
         messages = [{"role": "system", "content": self.get_system_prompt(user_name)}] + history
         messages.append({"role": "user", "content": message})
         
-        return self.ask_gemini(messages)
+        reply = self.ask_gemini(messages)
+        
+        # Save assistant response to Firestore
+        messages_ref.add({
+            "sender": "assistant",
+            "content": reply,
+            "user_id": user_id,
+            "model_name": model_name or self.model,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+        
+        return {
+            "reply": reply,
+            "session_id": session_id
+        }
     
     def get_all_sessions(self, user_id: str, limit: int = 50) -> dict:
         """
@@ -171,39 +225,41 @@ class ChatService:
         sessions = []
         
         try:
-            # Try to query by user_id if sessions have that field
-            query = sessions_ref.where("user_id", "==", user_id).order_by("updated_at", direction=firestore.Query.DESCENDING).limit(limit)
+            # Fetch sessions belonging to user without order_by to avoid index requirement
+            query = sessions_ref.where("user_id", "==", user_id).limit(limit * 2)
             session_docs = list(query.stream())
-        except Exception:
-            # If user_id field doesn't exist or query fails, get all and filter
-            # This is less efficient but handles cases where user_id isn't stored
-            all_sessions = sessions_ref.limit(limit * 2).stream()  # Get more to filter
+            
+            # If no results found with user_id field, try fallback filter
+            if not session_docs:
+                all_sessions = sessions_ref.limit(100).stream()
+                for doc in all_sessions:
+                    data = doc.to_dict()
+                    if data.get("user_id") == user_id:
+                        session_docs.append(doc)
+        except Exception as e:
+            print(f"Error fetching sessions: {e}")
             session_docs = []
-            for doc in all_sessions:
-                data = doc.to_dict()
-                # Filter by user_id from messages if session doesn't have user_id
-                # Check first message's user_id or session metadata
-                if data.get("user_id") == user_id:
-                    session_docs.append(doc)
-                elif len(session_docs) < limit:
-                    # Check messages to determine ownership
-                    first_msg = doc.reference.collection("messages").limit(1).stream()
-                    for msg in first_msg:
-                        msg_data = msg.to_dict()
-                        if msg_data.get("user_id") == user_id:
-                            session_docs.append(doc)
-                            break
+            
+        # Convert to list of dicts for sorting
+        session_list = []
+        for doc in session_docs:
+            data = doc.to_dict()
+            data["session_id"] = doc.id
+            session_list.append(data)
+            
+        # Sort by updated_at (or created_at) DESC (most recent first)
+        session_list.sort(key=lambda x: str(x.get('updated_at') or x.get('created_at') or ''), reverse=True)
         
-        # Process sessions and get message counts
-        for session_doc in session_docs[:limit]:
-            session_data = session_doc.to_dict()
+        # Process limited number of sessions and get message counts
+        for session_data in session_list[:limit]:
+            session_id = session_data["session_id"]
             
             # Get message count efficiently
-            messages_ref = session_doc.reference.collection("messages")
+            messages_ref = self.db.collection("sessions").document(session_id).collection("messages")
             message_count = len(list(messages_ref.stream()))
             
             sessions.append({
-                "session_id": session_doc.id,
+                "session_id": session_id,
                 "user_id": session_data.get("user_id"),
                 "created_at": session_data.get("created_at"),
                 "updated_at": session_data.get("updated_at"),

@@ -64,7 +64,7 @@ class MessageInput(BaseModel):
     user_id: int | str
     message: str
     model_name: str
-    session_id: str
+    session_id: Optional[str] = None
 
 
 class MessageResponse(BaseModel):
@@ -205,4 +205,40 @@ class DocumentStatusResponse(BaseModel):
     chunks_count: Optional[int] = None
     created_at: Optional[str] = None
     error: Optional[str] = None
+
+
+# Help/Queries Schemas
+class HelpQueryRequest(BaseModel):
+    """Help query request schema."""
+    subject: str
+    message: str
+
+
+class HelpQueryResponse(BaseModel):
+    """Help query response schema."""
+    id: str
+    user_id: str
+    subject: str
+    message: str
+    status: str  # "open", "in_progress", "resolved", "closed"
+    reply: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class HelpReplyRequest(BaseModel):
+    """Help reply request schema."""
+    reply: str
+
+
+class HelpStatusRequest(BaseModel):
+    """Help status update request schema."""
+    status: str  # "open", "in_progress", "resolved", "closed"
+
+
+# PDF Generation Schemas
+class GeneratePDFRequest(BaseModel):
+    """PDF generation request schema."""
+    template_id: str  # "modern", "minimal", "classic"
+    resume_data: dict  # Full resume JSON structure matching frontend format
 
