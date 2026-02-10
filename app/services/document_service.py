@@ -20,6 +20,7 @@ from firebase_admin import firestore
 from app.config import settings
 from app.db.firestore_client import get_firestore_db
 from app.services.usage_limit_service import usage_limit_service
+from app.services.auth_service import auth_service
 
 
 class DocumentService:
@@ -161,8 +162,10 @@ Answer:""",
                     "chunk_index": i
                 })
             
-            # Create FAISS vectorstore using batch embeddings
-            vectorstore = FAISS.from_documents(texts, self.embeddings)
+            # Create FAISS vectorstore using batch embeddings (user's API key if set)
+            user_api_key = auth_service.get_gemini_api_key(user_id)
+            embeddings = GeminiEmbeddings(api_key=user_api_key)
+            vectorstore = FAISS.from_documents(texts, embeddings)
             
             # Store vectorstore
             self.vectorstores[store_key] = vectorstore
@@ -321,18 +324,20 @@ Answer:""",
             "error": doc_data.get("error_message")
         }
     
-    def call_gemini_llm(self, prompt: str) -> str:
+    def call_gemini_llm(self, prompt: str, api_key: Optional[str] = None) -> str:
         """
         Call Gemini API for LLM response.
         
         Args:
             prompt: Input prompt
+            api_key: Optional Gemini API key (user's key or settings)
             
         Returns:
             LLM response text
         """
+        key = api_key or self.api_key
         headers = {
-            "x-goog-api-key": self.api_key,
+            "x-goog-api-key": key,
             "Content-Type": "application/json"
         }
         json_body = {
@@ -426,8 +431,9 @@ Answer:""",
         # Format prompt using template
         prompt = self.qa_prompt.format(context=context, question=question)
         
-        # Call LLM
-        answer = self.call_gemini_llm(prompt)
+        # Call LLM (user's API key if set)
+        user_api_key = auth_service.get_gemini_api_key(user_id)
+        answer = self.call_gemini_llm(prompt, api_key=user_api_key)
         
         return {
             "question": question,

@@ -4,6 +4,7 @@ from app.config import settings
 from app.db.firestore_client import get_firestore_db
 from firebase_admin import firestore
 from app.services.usage_limit_service import usage_limit_service
+from app.services.auth_service import auth_service
 
 
 class ChatService:
@@ -11,7 +12,6 @@ class ChatService:
     
     def __init__(self):
         self.db = get_firestore_db()
-        self.api_key = settings.gemini_api_key
         self.model = settings.gemini_model
         self.api_url = settings.gemini_api_url
     
@@ -101,18 +101,20 @@ class ChatService:
             return name.split()[0] if name else "there"
         return "there"
     
-    def ask_gemini(self, messages: list[dict]) -> str:
+    def ask_gemini(self, messages: list[dict], api_key: str = None) -> str:
         """
         Send messages to Gemini API and get response.
         
         Args:
             messages: List of message dictionaries
+            api_key: Optional Gemini API key (uses user's key or settings)
             
         Returns:
             AI response text
         """
+        key = api_key or settings.gemini_api_key
         headers = {
-            "x-goog-api-key": self.api_key,
+            "x-goog-api-key": key,
             "Content-Type": "application/json"
         }
         
@@ -194,7 +196,8 @@ class ChatService:
         messages = [{"role": "system", "content": self.get_system_prompt(user_name)}] + history
         messages.append({"role": "user", "content": message})
         
-        reply = self.ask_gemini(messages)
+        user_api_key = auth_service.get_gemini_api_key(user_id)
+        reply = self.ask_gemini(messages, api_key=user_api_key)
         
         # Save assistant response to Firestore
         messages_ref.add({

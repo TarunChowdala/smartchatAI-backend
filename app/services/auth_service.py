@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from firebase_admin import firestore
 from app.config import settings
 from app.db.firestore_client import get_firestore_db
-from app.core.security import decrypt_password
+from app.core.security import decrypt_password, encrypt_api_key, decrypt_api_key
 from app.models.schemas import (
     LoginRequest,
     SignupRequest,
@@ -131,6 +131,7 @@ class AuthService:
     def get_user(self, uid: str) -> dict:
         """
         Get user data by UID.
+        Does not include gemini_api_key; use has_gemini_key instead.
         
         Args:
             uid: User ID
@@ -144,7 +145,98 @@ class AuthService:
         user_doc = self.db.collection("users").document(uid).get()
         if not user_doc.exists:
             raise HTTPException(status_code=404, detail="User not found in database")
-        return user_doc.to_dict()
+        data = user_doc.to_dict()
+        # Never expose API key to client
+        if "gemini_api_key" in data:
+            data["has_gemini_key"] = True
+            del data["gemini_api_key"]
+        else:
+            data["has_gemini_key"] = False
+        if "password" in data:
+            del data["password"]
+        return data
+
+    def get_gemini_api_key(self, uid: str):
+        """
+        Get user's Gemini API key if set (decrypted, for server-side use only).
+        
+        Args:
+            uid: User ID
+            
+        Returns:
+            Decrypted API key string or None
+        """
+        user_doc = self.db.collection("users").document(uid).get()
+        if not user_doc.exists:
+            return None
+        data = user_doc.to_dict()
+        encrypted_key = data.get("gemini_api_key")
+        if not encrypted_key:
+            return None
+        
+        # Decrypt the stored key
+        try:
+            return decrypt_api_key(encrypted_key)
+        except Exception:
+            # If decryption fails, return as-is (for backward compatibility)
+            return encrypted_key
+
+    def update_gemini_api_key(self, uid: str, gemini_api_key: str) -> dict:
+        """
+        Save or update user's Gemini API key (encrypted before storage).
+        
+        Args:
+            uid: User ID from token
+            gemini_api_key: User's Gemini API key (plain text from frontend)
+            
+        Returns:
+            Confirmation message
+        """
+        key = (gemini_api_key or "").strip()
+        if not key:
+            raise HTTPException(status_code=400, detail="API key cannot be empty")
+        
+        # Decode base64 if frontend sends it encoded
+        try:
+            decoded_key = decrypt_password(key)  # Handles base64 decoding
+            if decoded_key != key:  # Was base64 encoded
+                key = decoded_key
+        except Exception:
+            pass  # Not base64 encoded, use as-is
+        
+        # Encrypt before storing
+        try:
+            encrypted_key = encrypt_api_key(key)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=f"Encryption failed: {str(e)}")
+        
+        ref = self.db.collection("users").document(uid)
+        if not ref.get().exists:
+            raise HTTPException(status_code=404, detail="User not found")
+        ref.update({
+            "gemini_api_key": encrypted_key,
+            "updated_at": firestore.SERVER_TIMESTAMP
+        })
+        return {"message": "Gemini API key saved successfully", "has_gemini_key": True}
+    
+    def remove_gemini_api_key(self, uid: str) -> dict:
+        """
+        Remove user's Gemini API key.
+        
+        Args:
+            uid: User ID from token
+            
+        Returns:
+            Confirmation message
+        """
+        ref = self.db.collection("users").document(uid)
+        if not ref.get().exists:
+            raise HTTPException(status_code=404, detail="User not found")
+        ref.update({
+            "gemini_api_key": firestore.DELETE_FIELD,
+            "updated_at": firestore.SERVER_TIMESTAMP
+        })
+        return {"message": "Gemini API key removed successfully", "has_gemini_key": False}
     
     def update_profile(self, email: str, update_data: UpdateProfileRequest, uid: str) -> dict:
         """

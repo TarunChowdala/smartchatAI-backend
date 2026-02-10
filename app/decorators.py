@@ -59,11 +59,14 @@ def handle_exceptions(func: Callable) -> Callable:
             result = await func(*args, **kwargs) if hasattr(func, "__call__") else func(*args, **kwargs)
             return result
         except HTTPException:
+            # Re-raise HTTPExceptions as-is
             raise
         except Exception as e:
+            # Extract error message properly
+            error_msg = str(e) if str(e) else repr(e) if repr(e) else f"{type(e).__name__}: An error occurred"
             raise HTTPException(
                 status_code=500,
-                detail=f"Internal server error: {str(e)}"
+                detail=f"Internal server error: {error_msg}"
             )
     
     return wrapper

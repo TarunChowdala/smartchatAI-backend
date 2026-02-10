@@ -1,6 +1,6 @@
 """Gemini Embeddings for document search - lightweight alternative to sentence-transformers."""
 import requests
-from typing import List
+from typing import List, Optional
 from langchain_core.embeddings import Embeddings
 from app.config import settings
 
@@ -11,8 +11,8 @@ class GeminiEmbeddings(Embeddings):
     Compatible with langchain's embedding interface.
     """
     
-    def __init__(self):
-        self.api_key = settings.gemini_api_key
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or settings.gemini_api_key
         self.embedding_model = "text-embedding-004"
         self.api_url = f"{settings.gemini_api_url}/{self.embedding_model}:embedContent"
     

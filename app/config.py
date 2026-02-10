@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     gemini_api_url: str = "https://generativelanguage.googleapis.com/v1beta/models"
     
+    # Encryption Configuration
+    encryption_key: Optional[str] = None  # Fernet key for encrypting user API keys
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

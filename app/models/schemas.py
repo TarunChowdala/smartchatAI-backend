@@ -43,6 +43,11 @@ class UpdatePasswordRequest(BaseModel):
     new_password: str
 
 
+class UpdateGeminiApiKeyRequest(BaseModel):
+    """Update Gemini API key request schema."""
+    gemini_api_key: str
+
+
 class RefreshTokenRequest(BaseModel):
     """Refresh token request schema."""
     refresh_token: str = Field(alias="refreshToken")

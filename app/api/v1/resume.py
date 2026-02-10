@@ -1,5 +1,6 @@
 """Resume analysis API routes."""
-from fastapi import APIRouter, UploadFile, File, Form, Depends
+from fastapi import APIRouter, UploadFile, File, Form, Depends, Query
+from fastapi.responses import Response
 from app.dependencies import get_current_user
 from app.services.resume_service import resume_service
 from app.services.pdf_service import pdf_service
@@ -125,4 +126,49 @@ async def generate_pdf(
     
     filename = f"resume_{req.template_id}_{current_user['uid'][:8]}.pdf"
     return pdf_service.create_pdf_response(pdf_bytes, filename)
+
+
+@router.post("/download")
+@handle_exceptions
+async def download_resume(
+    req: GeneratePDFRequest,
+    format: str = Query("pdf", description="Download format: 'pdf' or 'json'"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Download resume as PDF or JSON file.
+    
+    Args:
+        req: Request with template_id and resume_data
+        format: Download format - 'pdf' or 'json' (default: 'pdf')
+        current_user: Current user data from token (dependency injection)
+        
+    Returns:
+        Downloadable file (PDF or JSON)
+    """
+    if format.lower() == "json":
+        # Download as JSON
+        json_str = json.dumps(req.resume_data, indent=2, ensure_ascii=False)
+        filename = f"resume_{current_user['uid'][:8]}.json"
+        return Response(
+            content=json_str.encode('utf-8'),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    elif format.lower() == "pdf":
+        # Download as PDF
+        pdf_bytes = await pdf_service.generate_pdf(
+            template_id=req.template_id,
+            resume_data=req.resume_data
+        )
+        filename = f"resume_{req.template_id}_{current_user['uid'][:8]}.pdf"
+        return pdf_service.create_pdf_response(pdf_bytes, filename)
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid format. Must be 'pdf' or 'json'"
+        )
 

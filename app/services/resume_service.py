@@ -6,8 +6,10 @@ from pathlib import Path
 from fastapi import HTTPException
 from langchain_community.document_loaders import PyPDFLoader
 import requests
+from typing import Optional
 from app.config import settings
 from app.services.usage_limit_service import usage_limit_service
+from app.services.auth_service import auth_service
 
 
 class ResumeService:
@@ -53,13 +55,14 @@ class ResumeService:
         
         return resume_text
     
-    def call_gemini_api(self, prompt: str, timeout: int = 60) -> str:
+    def call_gemini_api(self, prompt: str, timeout: int = 60, api_key: Optional[str] = None) -> str:
         """
         Call Gemini API with prompt.
         
         Args:
             prompt: Input prompt
             timeout: Request timeout in seconds
+            api_key: Optional Gemini API key (user's key or settings)
             
         Returns:
             API response text
@@ -67,8 +70,9 @@ class ResumeService:
         Raises:
             HTTPException: If API call fails
         """
+        key = api_key or self.api_key
         headers = {
-            "x-goog-api-key": self.api_key,
+            "x-goog-api-key": key,
             "Content-Type": "application/json"
         }
         json_body = {
@@ -156,7 +160,8 @@ class ResumeService:
             {job_description}
             """
         
-        analysis_result = self.call_gemini_api(analysis_prompt, timeout=60)
+        user_api_key = auth_service.get_gemini_api_key(user_id)
+        analysis_result = self.call_gemini_api(analysis_prompt, timeout=60, api_key=user_api_key)
         cleaned_result = re.sub(r"^```(json)?|```$", "", analysis_result, flags=re.IGNORECASE).strip()
         
         # Increment usage count
@@ -402,7 +407,8 @@ class ResumeService:
         {resume_text}
         """
         
-        result = self.call_gemini_api(resume_prompt, timeout=60)
+        user_api_key = auth_service.get_gemini_api_key(user_id)
+        result = self.call_gemini_api(resume_prompt, timeout=60, api_key=user_api_key)
         cleaned_result = result.strip()
         cleaned_result = re.sub(r"^```(json)?|```$", "", cleaned_result, flags=re.IGNORECASE).strip()
         

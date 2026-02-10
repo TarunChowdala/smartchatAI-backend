@@ -8,6 +8,7 @@ from app.models.schemas import (
     GoogleSignupRequest,
     UpdateProfileRequest,
     UpdatePasswordRequest,
+    UpdateGeminiApiKeyRequest,
 )
 from app.decorators import handle_exceptions
 
@@ -99,4 +100,39 @@ async def update_password(data: UpdatePasswordRequest):
         New tokens after password update
     """
     return auth_service.update_password(data)
+
+
+@router.post("/settings/gemini-api-key")
+@handle_exceptions
+async def save_gemini_api_key(
+    data: UpdateGeminiApiKeyRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Save user's Gemini API key in account settings.
+    The key is stored in the user document and used for Gemini API calls when set.
+    """
+    uid = current_user["uid"]
+    return auth_service.update_gemini_api_key(uid, data.gemini_api_key)
+
+
+@router.get("/settings/gemini-api-key")
+@handle_exceptions
+async def get_gemini_api_key_status(current_user: dict = Depends(get_current_user)):
+    """
+    Return whether the user has a Gemini API key set (key is never returned).
+    """
+    uid = current_user["uid"]
+    user = auth_service.get_user(uid)
+    return {"has_gemini_key": user.get("has_gemini_key", False)}
+
+
+@router.delete("/settings/gemini-api-key")
+@handle_exceptions
+async def remove_gemini_api_key(current_user: dict = Depends(get_current_user)):
+    """
+    Remove user's Gemini API key from account settings.
+    """
+    uid = current_user["uid"]
+    return auth_service.remove_gemini_api_key(uid)
 

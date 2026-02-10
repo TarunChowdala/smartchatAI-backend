@@ -1,5 +1,6 @@
 """PDF generation service for resume builder."""
 import os
+import subprocess
 from pathlib import Path
 from typing import Dict, Any
 from fastapi import HTTPException
@@ -25,6 +26,9 @@ class PDFService:
         
         # Valid template IDs
         self.valid_templates = ["modern", "minimal", "tech", "classic"]
+        
+        # Track if browsers are installed
+        self._browsers_installed = False
     
     def _validate_template_id(self, template_id: str):
         """Validate template ID."""
@@ -48,13 +52,22 @@ class PDFService:
         self._validate_template_id(template_id)
         
         try:
+            template_path = self.templates_dir / f"{template_id}.html"
+            if not template_path.exists():
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Template file not found: {template_path}"
+                )
+            
             template = self.jinja_env.get_template(f"{template_id}.html")
             # Ensure we're passing the data correctly - unpack the resume_data dict
             html = template.render(**resume_data)
             return html
+        except HTTPException:
+            raise
         except TypeError as e:
             # Handle case where data structure doesn't match template expectations
-            error_msg = str(e)
+            error_msg = str(e) if str(e) else repr(e)
             if "'builtin_function_or_method' object is not iterable" in error_msg:
                 raise HTTPException(
                     status_code=400,
@@ -62,13 +75,60 @@ class PDFService:
                 )
             raise HTTPException(
                 status_code=500,
-                detail=f"Template rendering failed: {error_msg}"
+                detail=f"Template rendering failed (TypeError): {error_msg}"
+            )
+        except KeyError as e:
+            error_msg = str(e) if str(e) else repr(e)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required field in resume data: {error_msg}"
             )
         except Exception as e:
+            error_msg = str(e) if str(e) else repr(e)
+            error_type = type(e).__name__
             raise HTTPException(
                 status_code=500,
-                detail=f"Template rendering failed: {str(e)}"
+                detail=f"Template rendering failed ({error_type}): {error_msg}"
             )
+    
+    def _ensure_browsers_installed(self):
+        """Ensure Playwright browsers are installed."""
+        if self._browsers_installed:
+            return
+        
+        try:
+            # Try to import playwright and check if browsers are installed
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                try:
+                    browser = p.chromium.launch(headless=True)
+                    browser.close()
+                    self._browsers_installed = True
+                    return
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        
+        # Try to install browsers
+        try:
+            result = subprocess.run(
+                ["playwright", "install", "chromium"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            if result.returncode == 0:
+                self._browsers_installed = True
+                return
+        except Exception:
+            pass
+        
+        # If we get here, browsers aren't installed and we couldn't install them
+        raise HTTPException(
+            status_code=500,
+            detail="Playwright browser not installed. Add 'playwright install chromium' to your build process."
+        )
     
     async def _html_to_pdf(self, html: str) -> bytes:
         """
@@ -83,6 +143,9 @@ class PDFService:
         Raises:
             HTTPException: If PDF generation fails
         """
+        # Ensure browsers are installed before attempting PDF generation
+        self._ensure_browsers_installed()
+        
         try:
             async with async_playwright() as p:
                 # Launch browser
@@ -108,14 +171,20 @@ class PDFService:
                 await browser.close()
                 
                 return pdf_bytes
+        except HTTPException:
+            raise
         except Exception as e:
-            error_msg = str(e)
+            error_msg = str(e) if str(e) else repr(e)
             if "Executable doesn't exist" in error_msg or "browser" in error_msg.lower():
                 raise HTTPException(
                     status_code=500,
-                    detail="Playwright browser not installed. Run: playwright install chromium"
+                    detail="Playwright browser not installed. Add 'playwright install chromium' to your Render build command."
                 )
-            raise
+            # Re-raise with better error message
+            raise HTTPException(
+                status_code=500,
+                detail=f"PDF generation failed: {error_msg}"
+            )
     
     async def generate_pdf(self, template_id: str, resume_data: Dict[str, Any]) -> bytes:
         """
@@ -140,10 +209,15 @@ class PDFService:
             
             return pdf_bytes
             
+        except HTTPException:
+            # Re-raise HTTPExceptions as-is (they already have proper error messages)
+            raise
         except Exception as e:
+            # Extract error message properly
+            error_msg = str(e) if str(e) else repr(e)
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to generate PDF: {str(e)}"
+                detail=f"Failed to generate PDF: {error_msg}"
             )
     
     def create_pdf_response(self, pdf_bytes: bytes, filename: str = "resume.pdf") -> Response:
