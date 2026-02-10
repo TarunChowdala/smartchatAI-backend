@@ -35,7 +35,19 @@ class AuthService:
             HTTPException: If credentials are invalid
         """
         # Decrypt password from frontend
-        decrypted_password = decrypt_password(data.password)
+        try:
+            decrypted_password = decrypt_password(data.password)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to decode password: {str(e)}"
+            )
+        
+        if not self.firebase_api_key:
+            raise HTTPException(
+                status_code=500,
+                detail="Firebase API key not configured"
+            )
         
         url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={self.firebase_api_key}"
         payload = {
@@ -47,7 +59,27 @@ class AuthService:
         response = requests.post(url, json=payload)
         
         if response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            error_detail = "Invalid credentials"
+            try:
+                error_data = response.json()
+                # Firebase error format: {"error": {"message": "...", "code": ...}}
+                if "error" in error_data:
+                    error_message = error_data["error"].get("message", "")
+                    error_code = error_data["error"].get("code", "")
+                    if error_message:
+                        error_detail = f"{error_message}"
+                        # Add helpful hints for common errors
+                        if "EMAIL_NOT_FOUND" in error_message or "email" in error_message.lower():
+                            error_detail += " (User may not exist. Try signing up first.)"
+                        elif "INVALID_PASSWORD" in error_message or "password" in error_message.lower():
+                            error_detail += " (Password is incorrect.)"
+                else:
+                    # If no error structure, show raw response
+                    error_detail = f"Authentication failed: {str(error_data)[:200]}"
+            except Exception as e:
+                # If JSON parsing fails, show raw text
+                error_detail = f"Authentication failed: {response.text[:200]}"
+            raise HTTPException(status_code=401, detail=error_detail)
         
         res_data = response.json()
         user_id = res_data["localId"]
