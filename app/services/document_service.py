@@ -45,7 +45,7 @@ class DocumentService:
             template="""You are an Enterprise Document Specialist assistant. Your goal is to provide accurate, professional, and friendly information based EXCLUSIVELY on the provided documents.
 
 ### GUIDELINES:
-1. **Greetings**: If the user says hi/hello, respond with a professional yet warm greeting (e.g., "Hello! I'm your Document Assistant. How can I assist you with the uploaded files today?")
+1. **Answer Questions**: Always answer the user's question using the provided Context. Do NOT respond with greetings unless the question is explicitly a greeting (like "hi", "hello", "hey").
 2. **Strict Grounding**: Answer ONLY using the provided Context. If the answer isn't there, use one of the "Information Not Found" responses below.
 3. **Tone**: Be professional, helpful, and concise. Use clear formatting (bullet points, bold text) for complex information.
 4. **No Assumptions**: Do not hallucinate or use external knowledge. If a document is unclear, state that the information provided is ambiguous.
@@ -56,6 +56,10 @@ If the context doesn't have the answer, use one of these:
 - "I've searched the documents, but I couldn't find specific information regarding that. Is there something else I can help with?"
 - "The current documents don't seem to cover this topic. Please feel free to ask about other sections of the content."
 - "I'm sorry, but that information isn't available in the provided context. I'd be happy to help with other document-related questions!"
+
+### IMPORTANT:
+- If the question is a greeting (hi, hello, hey), respond with: "Hello! I'm your Document Assistant. How can I assist you with the uploaded files today?"
+- For ALL other questions, answer using the Context provided below. Do NOT use the greeting response.
 
 Context:
 {context}
@@ -406,16 +410,34 @@ Answer:""",
                 raise HTTPException(status_code=403, detail="Not authorized to access this document")
             raise HTTPException(status_code=404, detail="Document vectorstore not found. Processing may have failed.")
         
+        # Handle greetings separately (don't use RAG for simple greetings)
+        question_lower = question.strip().lower()
+        greeting_keywords = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening"]
+        if question_lower in greeting_keywords or any(question_lower.startswith(g) for g in greeting_keywords):
+            return {
+                "question": question,
+                "answer": "Hello! I'm your Document Assistant. How can I assist you with the uploaded files today?",
+                "chunks_used": 0,
+                "source_documents": []
+            }
+        
+        # Detect analysis/evaluation questions (like "is this good", "how is", "what do you think")
+        analysis_keywords = ["is this", "how is", "what do you think", "evaluate", "analyze", "review", "assess", "rate", "opinion"]
+        is_analysis_question = any(keyword in question_lower for keyword in analysis_keywords)
+        
+        # For analysis questions, retrieve more chunks to get broader context
+        retrieval_k = k * 2 if is_analysis_question else k
+        
         # Use advanced retrieval (MMR or similarity)
         if use_mmr:
             docs = vector_store.max_marginal_relevance_search(
                 question,
-                k=k,
-                fetch_k=k * 4,
+                k=retrieval_k,
+                fetch_k=retrieval_k * 4,
                 lambda_mult=0.5
             )
         else:
-            docs = vector_store.similarity_search(question, k=k)
+            docs = vector_store.similarity_search(question, k=retrieval_k)
         
         if not docs:
             return {
@@ -428,12 +450,49 @@ Answer:""",
         # Format context
         context = "\n\n".join([doc.page_content for doc in docs])
         
-        # Format prompt using template
-        prompt = self.qa_prompt.format(context=context, question=question)
+        # Ensure context is not empty
+        if not context or not context.strip():
+            return {
+                "question": question,
+                "answer": "I couldn't find any relevant information in the documents to answer this question.",
+                "chunks_used": 0,
+                "source_documents": []
+            }
+        
+        # Use different prompt for analysis questions
+        if is_analysis_question:
+            # For analysis questions, provide full document context and ask for evaluation
+            analysis_prompt = f"""You are an expert document analyst. Analyze and evaluate the provided document content to answer the user's question.
+
+Document Content:
+{context}
+
+Question: {question}
+
+Provide a detailed analysis and answer based on the document content. Be specific and reference relevant parts of the document in your answer. If the question asks for evaluation (like "is this good"), provide constructive feedback based on the content.
+
+Answer:"""
+            prompt = analysis_prompt
+        else:
+            # Format prompt using template for factual questions
+            prompt = self.qa_prompt.format(context=context, question=question)
         
         # Call LLM (user's API key if set)
         user_api_key = auth_service.get_gemini_api_key(user_id)
         answer = self.call_gemini_llm(prompt, api_key=user_api_key)
+        
+        # Ensure answer is not just the greeting (fallback check)
+        if answer.strip().lower().startswith("hello! i'm your document assistant"):
+            # If LLM still returned greeting for non-greeting question, try again with more explicit prompt
+            explicit_prompt = f"""Answer the following question using ONLY the provided context. Do NOT respond with greetings.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer the question directly:"""
+            answer = self.call_gemini_llm(explicit_prompt, api_key=user_api_key)
         
         return {
             "question": question,

@@ -39,16 +39,9 @@ class GeminiEmbeddings(Embeddings):
         Returns:
             List of embedding vectors
         """
-        # Use batch API for efficiency (supports up to 100 texts per batch)
-        batch_size = 100
-        all_embeddings = []
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            batch_embeddings = self._embed_batch(batch)
-            all_embeddings.extend(batch_embeddings)
-        
-        return all_embeddings
+        # Use sequential API calls (more reliable than batch API)
+        # Can be optimized later if batch API format is confirmed
+        return [self._embed_text(text) for text in texts]
     
     def embed_query(self, text: str) -> List[float]:
         """
@@ -105,13 +98,30 @@ class GeminiEmbeddings(Embeddings):
             result = response.json()
             
             # Extract embeddings from batch response
+            # Response format: {"embeddings": [{"embedding": {"values": [...]}}, ...]}
             if "embeddings" not in result:
                 raise ValueError(f"Unexpected batch API response format: {result}")
             
-            return [emb["embedding"]["values"] for emb in result["embeddings"]]
+            embeddings_list = []
+            for emb in result["embeddings"]:
+                if "embedding" not in emb:
+                    raise ValueError(f"Missing 'embedding' key in response: {emb}. Full response: {result}")
+                if "values" not in emb["embedding"]:
+                    raise ValueError(f"Missing 'values' key in embedding: {emb['embedding']}. Full response: {result}")
+                embeddings_list.append(emb["embedding"]["values"])
+            
+            return embeddings_list
+        except (KeyError, ValueError) as e:
+            # If it's a parsing error, fallback to sequential
+            error_msg = str(e)
+            print(f"Batch embedding parsing failed, falling back to sequential: {error_msg}")
+            return [self._embed_text(text) for text in texts]
         except requests.exceptions.RequestException as e:
             # Fallback to sequential if batch fails
-            print(f"Batch embedding failed, falling back to sequential: {e}")
+            error_detail = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                error_detail += f" - Response: {e.response.text}"
+            print(f"Batch embedding API call failed, falling back to sequential: {error_detail}")
             return [self._embed_text(text) for text in texts]
     
     def _embed_text(self, text: str) -> List[float]:
@@ -153,8 +163,20 @@ class GeminiEmbeddings(Embeddings):
             response.raise_for_status()
             result = response.json()
             
-            if "embedding" not in result or "values" not in result["embedding"]:
-                raise ValueError(f"Unexpected API response format: {result}")
+            # Check response structure and provide detailed error
+            if "embedding" not in result:
+                raise ValueError(
+                    f"Missing 'embedding' key in API response. "
+                    f"Response keys: {list(result.keys())}. "
+                    f"Full response: {result}"
+                )
+            
+            if "values" not in result["embedding"]:
+                raise ValueError(
+                    f"Missing 'values' key in embedding. "
+                    f"Embedding keys: {list(result['embedding'].keys())}. "
+                    f"Full response: {result}"
+                )
             
             return result["embedding"]["values"]
         except requests.exceptions.RequestException as e:
